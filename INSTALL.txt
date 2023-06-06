@@ -1,0 +1,4 @@
+python3 -m venv .venv
+source .venv/bin/Activate
+poetry install --with=dev
+export PYTHONPATH=$(realpath ./stream_man)
