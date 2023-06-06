@@ -1,0 +1,51 @@
+repos:
+  - repo: "https://github.com/pre-commit/pre-commit-hooks"
+    rev: v4.4.0
+    hooks:
+      # General hooks
+      - id: check-symlinks # Make sure symlinks are valid
+      - id: trailing-whitespace # Clean up trailing whitespace
+
+      # Python hooks
+      - id: check-ast # Make sure Python files are valid
+      - id: check-builtin-literals # Only allow literals when creating empty data structures
+      - id: check-docstring-first # Make sure docstrings are in the correct location
+
+      # JSON hooks
+      - id: check-json
+      - id: pretty-format-json
+
+      # TOML hooks
+      - id: check-toml
+
+      # XML hooks
+      - id: check-xml
+
+      # YAML hooks
+      - id: check-yaml
+      - id: sort-simple-yaml
+
+      # Requirements.txt hooks
+      - id: requirements-txt-fixer
+
+      # Compatibility hooks
+      - id: check-case-conflict # Make sure files are safe for Windows
+      - id: end-of-file-fixer # Make sure files end in a newline
+      - id: mixed-line-ending # Clean up line endings to all be the same
+      - id: fix-byte-order-marker # Remove UTF-8 byte order marker
+
+
+  - repo: "https://github.com/psf/black"
+    rev: 22.6.0
+    hooks:
+      - id: black
+
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+
+  - repo: https://github.com/PyCQA/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8

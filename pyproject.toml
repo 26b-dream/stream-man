@@ -1,0 +1,38 @@
+[tool.black]
+line-length = 120
+
+[tool.isort]
+profile = "black"
+line_length = 120
+
+[tool.pylint]
+disable = [
+    "C0301", # line-too-long: Black makes this redundant
+    "E1101", # no-member: Black makes thie redundant and it sometimes has false positives
+]
+
+[tool.poetry]
+# name = "Name"
+version = "0.0.1"
+# description = "Description"
+authors = ["26b_dream <1@1.1>"]
+# readme = "README.md"
+license = "AGPL-3.0-only"
+
+[tool.poetry.dependencies]
+python = "^3.8.1"
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.3.0"
+isort = "^5.12.0"
+flake8 = "^6.0.0"
+pytest = "^7.3.1"
+pylint = "^2.17.4"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

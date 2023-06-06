@@ -1,3 +1,13 @@
+# Poetry specific
+poetry.lock
+
+# Mac specific
+.DS_Store
+
+####################################################
+# Below this line is the default Python .gitignore #
+####################################################
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

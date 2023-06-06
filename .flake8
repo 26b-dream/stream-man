@@ -1,0 +1,5 @@
+[flake8]
+ignore=
+    E501, # Line too long (82 > 79 characters): Black makes this redundant
+    F401 # Module imported but unused: Black makes this redundant
+    W503 # Line break occurred before a binary operator: Does not match Black formatter
