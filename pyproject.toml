@@ -10,6 +10,8 @@ disable = [
     "C0301", # line-too-long: Black makes this redundant
     "E1101", # no-member: Black makes thie redundant and it sometimes has false positives
     "E0307", # invalid-str-returned: Black makes this redundant and it sometimes has false positives
+    "E0611", # invalid-str-returned: Black makes this redundant and it sometimes has false positives
+    "E0401", # import-error: Black makes this redundant and it has false positives because it does not use PYTHONPATH
 ]
 
 [tool.poetry]
@@ -23,8 +25,12 @@ license = "AGPL-3.0-only"
 [tool.poetry.dependencies]
 python = "^3.8.1"
 django = "^4.2"
+playwright = "^1.34"
+playwright-stealth = "^1.0.5"
 
 django_model_helpers = { git = "https://github.com/26b-dream/django-model-helpers" }
+json_file = { git = "https://github.com/26b-dream/json-file" }
+html_file = { git = "https://github.com/26b-dream/html-file" }
 
 [tool.poetry.group.dev]
 optional = true
