@@ -1,6 +1,7 @@
 {
     "pylint.args": [
+        "--allow-reexport-from-package=True",
         "--load-plugins=pylint_django",
-        "--django-settings-module=stream_man"
-    ]
+        "--django-settings-module=stream_man",
+    ],
 }
