@@ -18,6 +18,9 @@ def import_scrapers():
         if scraper.is_dir():
             scraper_path = f"scrapers.{scraper.name}"
             importlib.import_module(scraper_path)
+        elif scraper.suffix == ".py":
+            scraper_path = f"scrapers.{scraper.stem}"
+            importlib.import_module(scraper_path)
 
 
 class InvalidURLError(Exception):
