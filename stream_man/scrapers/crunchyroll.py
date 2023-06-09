@@ -45,6 +45,10 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
         self.show_id = str(re.strict_search(self.SHOW_URL_REGEX, show_url).group("show_id"))
         self.show_info = Show().get_or_new(show_id=self.show_id, website=self.WEBSITE)[0]
 
+    def show_object(self) -> Show:
+        """The Show object from the database"""
+        return self.show_info
+
     def logger_identifier(self) -> str:
         """The best possibel string for identifying a show given the known information"""
         if self.show_info.name:
@@ -98,9 +102,10 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
             list[ExtendedPath]: List of outdated files, empty if all files are up to date"""
         output = self.any_show_file_outdated(minimum_timestamp)
 
-        show_seasons_json_parsed = self.show_seasons_json_path().parsed()
-        for season in show_seasons_json_parsed["data"]:
-            output += self.any_season_file_is_outdated(season["id"], minimum_timestamp)
+        if self.show_seasons_json_path().exists():
+            show_seasons_json_parsed = self.show_seasons_json_path().parsed()
+            for season in show_seasons_json_parsed["data"]:
+                output += self.any_season_file_is_outdated(season["id"], minimum_timestamp)
 
         return output
 
@@ -116,9 +121,9 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
         outdated_files: list[ExtendedPath] = []
         if self.show_html_path().outdated(minimum_timestamp):
             outdated_files.append(self.show_html_path())
-        elif self.show_json_path().outdated(minimum_timestamp):
+        if self.show_json_path().outdated(minimum_timestamp):
             outdated_files.append(self.show_json_path())
-        elif self.show_seasons_json_path().outdated(minimum_timestamp):
+        if self.show_seasons_json_path().outdated(minimum_timestamp):
             outdated_files.append(self.show_seasons_json_path())
 
         return outdated_files
@@ -151,8 +156,7 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
         self, minimum_info_timestamp: Optional[datetime] = None, minimum_modified_timestamp: Optional[datetime] = None
     ) -> None:
         """Update the information for the show"""
-        daddy_logger = logging.getLogger(self.logger_identifier())
-        daddy_logger.info("Updating %s", self.show_info)
+        logging.getLogger(self.logger_identifier()).info("Updating %s", self.show_info)
         self.download_all(minimum_info_timestamp)
         self.import_all(minimum_info_timestamp, minimum_modified_timestamp)
 
