@@ -289,6 +289,7 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
 
             self.show_info.name = parsed_show["title"]
             self.show_info.description = parsed_show["description"]
+            self.show_info.url = self.show_url()
             # poster_wide is an image with a 16x9 ratio (poster_tall is 6x9)
             # [0] is the first poster_wide design (as far as I can tell there is always just one)
             # [0][0] the first image listed is the lowest resolution
@@ -344,6 +345,7 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
                     episode_info.number = episode["episode"]
                     episode_info.description = episode["description"]
                     episode_info.duration = episode["duration_ms"] / 1000
+                    episode_info.url = f"{self.DOMAIN}/watch/{episode['id']}"
 
                     episode_info.release_date = datetime.strptime(episode["episode_air_date"], "%Y-%m-%dT%H:%M:%S%z")
                     # Every now and then a show just won't have thumbnails
