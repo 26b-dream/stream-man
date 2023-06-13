@@ -1,4 +1,4 @@
-"""Base scraper class for scraping streaming websites"""
+"""Contains ScraperShared, ScraperUpdateShared, and ScraperShowShared, which are shared code for scraper plugins"""
 
 from __future__ import annotations
 
@@ -28,7 +28,8 @@ class ScraperShared:
         Args:
             playwright (Playwright): Playwright instance
             user_agent (_type_, optional): User agent for playwright. Defaults to "Mozilla/5.0 (Macintosh; Intel Mac OS
-            X 10.15; rv:109.0) Gecko/20100101 Firefox/111.0".
+            X 10.15; rv:109.0) Gecko/20100101 Firefox/111.0" which is basically a generic and perfectly valid user
+            agent.
 
         Returns:
             BrowserContext: Playwright browser context"""
