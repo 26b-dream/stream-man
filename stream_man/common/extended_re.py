@@ -2,20 +2,9 @@
 
 from __future__ import annotations
 
-# Import all of re so it can be exported
-# This will cause a lot of pylint errors
-from re import compile  # pyright: ignore[reportUnusedImport] # pylint: disable=C0414, W0611, W0622
-from re import escape  # pyright: ignore[reportUnusedImport] # pylint: disable=C0414, W0611
-from re import findall  # pyright: ignore[reportUnusedImport] # pylint: disable=C0414, W0611
-from re import finditer  # pyright: ignore[reportUnusedImport] # pylint: disable=C0414, W0611
-from re import fullmatch  # pyright: ignore[reportUnusedImport] # pylint: disable=C0414, W0611
-from re import match  # pyright: ignore[reportUnusedImport] # pylint: disable=C0414, W0611
-from re import purge  # pyright: ignore[reportUnusedImport] # pylint: disable=C0414, W0611
-from re import search  # pylint: disable=C0414, W0611
-from re import split  # pyright: ignore[reportUnusedImport] # pylint: disable=C0414, W0611
-from re import sub  # pyright: ignore[reportUnusedImport] # pylint: disable=C0414, W0611
-from re import subn  # pyright: ignore[reportUnusedImport] # pylint: disable=C0414, W0611
-from re import template  # pyright: ignore[reportUnusedImport] # pylint: disable=C0414, W0611
+# Import all of re so it can be exported, one of the few places were a wildcard import is acceptable
+from re import *  # pylint: disable=W0622,W0401,W0614 # noqa: F403
+from re import search
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
