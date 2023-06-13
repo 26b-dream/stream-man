@@ -1,4 +1,4 @@
-"""Includes AbstractScraperClass, which all scraper plugins must inherit and implement"""
+"""Contains AbstractScraperClass, which all scraper plugins must inherit and implement"""
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Optional
