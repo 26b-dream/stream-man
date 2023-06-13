@@ -1,3 +1,4 @@
+"""Django admin page config for the media app."""
 from django.contrib import admin
 
 from .models import Episode, EpisodeWatch, Season, Show, UpdateQue
