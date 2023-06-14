@@ -5,7 +5,7 @@ folder`"""
 import importlib
 
 from common.abstract_scraper import AbstractScraperClass
-from constants import BASE_DIR
+from common.constants import BASE_DIR
 
 
 def import_scrapers():
