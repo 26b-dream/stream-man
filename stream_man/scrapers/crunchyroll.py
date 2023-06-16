@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 
 class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
-    """PLugin for crunchyroll show"""
+    """PLugin for Crunchyroll"""
 
     WEBSITE = "Crunchyroll"
     DOMAIN = "https://www.crunchyroll.com"
@@ -35,6 +35,10 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
     #   https://www.crunchyroll.com/series/G63VW2VWY
     #   https://www.crunchyroll.com/series/G63VW2VWY/non-non-biyori
     SHOW_URL_REGEX = re.compile(r"^(?:https:\/\/w?w?w?.?crunchyroll\.com)?\/series\/*(?P<show_id>.*?)(?:\/|$)")
+
+    def website_name(self) -> str:
+        """Name of the website"""
+        return self.WEBSITE
 
     @classmethod
     def is_valid_show_url(cls, show_url: str) -> bool:
@@ -318,7 +322,8 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
             season_info = Season().get_or_new(season_id=season["id"], show=self.show_info)[0]
 
             if season_info.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
-                season_info.sort_order = parsed_episode["season_number"]
+                season_info.sort_order = sort_order
+                season_info.number = parsed_episode["season_number"]
                 season_info.name = parsed_episode["season_title"]
                 season_info.sort_order = sort_order
                 season_info.deleted = False
