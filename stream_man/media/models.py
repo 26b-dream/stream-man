@@ -67,6 +67,7 @@ class Season(ModelWithIdAndTimestamp, GetOrNew):
     # TODO: I think this was Netflix, need to have an example of this
     name = models.CharField(max_length=64)
     sort_order = models.PositiveSmallIntegerField()
+    number = models.PositiveSmallIntegerField()
     """The order that seasons are sorted on the original website"""
     image_url = models.CharField(max_length=255)
     thumbnail_url = models.CharField(max_length=255)
