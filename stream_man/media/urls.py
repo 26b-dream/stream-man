@@ -3,6 +3,7 @@ from django.urls import path
 
 from . import views
 
+app_name = "media"
 urlpatterns = [
     path("", views.Indexes.media, name="media"),
     path("show/<int:show_id>/", views.Indexes.show, name="show"),

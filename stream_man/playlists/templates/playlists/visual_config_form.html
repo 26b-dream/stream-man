@@ -4,7 +4,7 @@
   of the episodes {% endcomment %}
   {% comment %} htmx:xhr:loadend: - Do the update after the form's reponse is given because the value is stored as a
   cookie in the response of the form {% endcomment %}
-  <button hx-post="{% url 'visual_config_form' playlist_id=playlist.id %}"
+  <button hx-post="{% url 'playlists:visual_config_form' playlist_id=playlist.id %}"
           hx-target="#htmx-footer"
           hx-on="htmx:xhr:loadend: change_cards_per_row(getCookie(`playlist_{{ playlist.id }}_columns`));">
     Update Visuals
