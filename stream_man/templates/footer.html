@@ -1,0 +1,23 @@
+{% load static %}
+<footer class="footer mt-auto">
+  {% comment %} This div is fixed to the viewport and will always be visible, it is basically the real footer and the
+  real footer for the page{% endcomment %}
+  <div class="position-fixed bottom-0 z-1 bg-body-tertiary">
+    {% comment %} Button to close the footer {% endcomment %}
+    <button type="button"
+            class="btn-close float-end"
+            aria-label="Close"
+            onclick="delete_htmx_footer_content()"
+            id="footer-close-button"
+            style="display: none"></button>
+    {% comment %} Div who's contents will be replaced by htmx {% endcomment %}
+    <div id="htmx-footer"></div>
+  </div>
+  {% comment %} Fake div that is used to pad the vertical height of the page so that the footer will never cover up the
+  content on the page {% endcomment %}
+  <div id="htmx-footer-padding"></div>
+  {% comment %} Default bootstrap JavaScript {% endcomment %}
+  <script src="{% static "bootstrap/bootstrap.bundle.min.js" %}"></script>
+  {% comment %} Extra javascript functions {% endcomment %}
+  <script src="{% static "functions.js" %}"></script>
+</footer>

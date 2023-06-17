@@ -1,0 +1,17 @@
+{% load static %}
+<head>
+  {% comment %} Bootstrap default headers with slight modifications {% endcomment %}
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="" />
+  <meta name="author" content="26b-dream" />
+  <meta name="generator" content="Django" />
+  <title>{{ title }}</title>
+  <link rel="canonical" href="{{ request.build_absolute_uri }}" />
+  {% comment %} Bootstrap CSS {% endcomment %}
+  <link href="{% static "bootstrap/bootstrap.min.css" %}" rel="stylesheet" />
+  {% comment %} htmx {% endcomment %}
+  <script src="{% static "htmx/htmx.min.js" %}"></script>
+  {% comment %} Official bootstrap Script for button to change the color scheme {% endcomment %}
+  <script src="{% static "bootstrap/color-modes.js" %}"></script>
+</head>
