@@ -1,6 +1,7 @@
 {% load playlist_tags %}
 <form>
     {% csrf_token %} {{ form }}
-    <button hx-post="{% url "media:mark_episode_watched_form" %}"
-            hx-target="#htmx-footer">Mark Watched</button>
+    <button hx-post="{% url "media:forms/mark_episode_watched" episode.id %}" hx-target="#htmx-footer">
+        Mark Watched
+    </button>
 </form>

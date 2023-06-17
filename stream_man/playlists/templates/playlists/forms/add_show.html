@@ -1,5 +1,5 @@
 <form>
   {% csrf_token %} {{ form }}
-  <button hx-post="{% url 'playlists:add_show_form' playlist_id=playlist.id %}"
+  <button hx-post="{% url 'playlists:forms/add_show' playlist.id %}"
           hx-target="#htmx-footer">Add shows</button>
 </form>

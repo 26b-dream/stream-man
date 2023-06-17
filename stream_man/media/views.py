@@ -7,8 +7,8 @@ from .forms import MarkEpisodeWatchedForm
 from .models import Episode, EpisodeWatch, Season, Show
 
 
-class Indexes:
-    """Views for the indexes for the media app."""
+class Pages:
+    """Views for the pages for the media app."""
 
     @staticmethod
     def media(request: HttpRequest):
@@ -43,7 +43,7 @@ class Forms:
 
     @staticmethod
     @transaction.atomic
-    def mark_episode_watched_form(request: HttpRequest):
+    def mark_episode_watched(request: HttpRequest, episode_id: int):
         """Form for marking an episode as watched."""
         form = MarkEpisodeWatchedForm(request.POST)
 
@@ -55,4 +55,4 @@ class Forms:
             form.save()
 
         content = {"form": form}
-        return render(request, "media/mark_episode_watched_form.html", content)
+        return render(request, "media/mark_episode_watched.html", content)
