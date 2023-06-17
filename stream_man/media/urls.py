@@ -5,9 +5,11 @@ from . import views
 
 app_name = "media"
 urlpatterns = [
+    # Indexes
     path("", views.Indexes.media, name="media"),
     path("show/<int:show_id>/", views.Indexes.show, name="show"),
     path("season/<int:season_id>/", views.Indexes.season, name="season"),
     path("episode/<int:episode_id>/", views.Indexes.episode, name="episode"),
+    # Forms
     path("mark_episode_watched_form/", views.Forms.mark_episode_watched_form, name="mark_episode_watched_form"),
 ]
