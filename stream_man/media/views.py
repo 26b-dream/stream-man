@@ -1,7 +1,7 @@
 """Views for the media app."""
 from django.db import transaction
 from django.http import HttpRequest
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 
 from .forms import MarkEpisodeWatchedForm
 from .models import Episode, EpisodeWatch, Season, Show
@@ -45,6 +45,7 @@ class Forms:
     @transaction.atomic
     def mark_episode_watched(request: HttpRequest, episode_id: int):
         """Form for marking an episode as watched."""
+        episode = get_object_or_404(Episode, id=episode_id)
         form = MarkEpisodeWatchedForm(request.POST)
 
         # The episode must be deleted before the form is checked for validity to make sure the form doesn't return an error
@@ -54,5 +55,5 @@ class Forms:
         if form.is_valid() and not form.cleaned_data["deleted"]:
             form.save()
 
-        content = {"form": form}
-        return render(request, "media/mark_episode_watched.html", content)
+        content = {"form": form, "episode": episode}
+        return render(request, "media/forms/mark_episode_watched.html", content)
