@@ -1,0 +1,55 @@
+{% load static %}
+{% load playlist_tags %}
+<!DOCTYPE html>
+<html lang="en" class="h-100" data-bs-theme="auto">
+  {% include "head.html" with title="Stream Man Playlists" request=request %}
+  <body class="d-flex flex-column h-100">
+    {% include "header.html" with current_link="playlists" %}
+    <main class="flex-shrink-0">
+      <div class="container-fluid">
+        <h1 class="mt-5">{{ playlist.name }}</h1>
+        {% comment %} hx-on - unclick because when these buttons are clicked the cards should be unclicked {% endcomment %}
+        <button hx-target="#htmx-footer"
+                hx-swap="innerHTML"
+                hx-get="{% url 'playlists:forms/edit_playlist' playlist.id %}"
+                hx-on="htmx:afterRequest: unclick()"
+                type="button"
+                class="btn btn-primary">Edit Playlist</button>
+        <button hx-target="#htmx-footer"
+                hx-swap="innerHTML"
+                hx-get="{% url 'playlists:forms/add_show' playlist.id %}"
+                hx-on="htmx:afterRequest: unclick()"
+                type="button"
+                class="btn btn-primary">Add Shows</button>
+        <button hx-target="#htmx-footer"
+                hx-swap="innerHTML"
+                hx-get="{% url 'playlists:forms/remove_show' playlist.id %}"
+                hx-on="htmx:afterRequest: unclick()"
+                type="button"
+                class="btn btn-primary">Remove Shows</button>
+        <button hx-target="#htmx-footer"
+                hx-swap="innerHTML"
+                hx-get="{% url 'playlists:forms/visual_config' playlist.id %}"
+                hx-on="htmx:afterRequest: unclick()"
+                type="button"
+                class="btn btn-primary">Visual Config</button>
+        <button id="open-filter-episodes-form-button"
+                hx-target="#htmx-footer"
+                hx-swap="innerHTML"
+                hx-vals="{% playlist_filter_json request playlist %}"
+                hx-post="{% url 'playlists:forms/playlist_filter' playlist.id %}"
+                hx-on="htmx:afterRequest: unclick()"
+                type="button"
+                class="btn btn-primary">Filter Episodes</button>
+        {% comment %} Div that holds all of the cards {% endcomment %}
+        <div id="playlist-cards"
+             hx-get="{% url 'playlists:cards/episodes' playlist.id %}"
+             hx-vals="{% playlist_filter_json request playlist %}"
+             hx-swap="outerHTML"
+             hx-target="this"
+             hx-trigger="load, refreshEpisodes from:body"></div>
+      </div>
+    </main>
+    {% include "footer.html" %}
+  </body>
+</html>
