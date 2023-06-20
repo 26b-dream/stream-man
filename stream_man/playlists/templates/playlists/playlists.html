@@ -1,0 +1,28 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" class="h-100" data-bs-theme="auto">
+  {% include "head.html" with title="Stream Man Playlists" request=request %}
+  <body class="d-flex flex-column h-100">
+    {% include "header.html" with current_link="playlists" %}
+    <main class="flex-shrink-0">
+      <div class="container-fluid">
+        <h1 class="mt-5">Playlists</h1>
+        {% comment %} hx-on - unclick because when these buttons are clicked the cards should be unclicked {% endcomment %}
+        <button hx-target="#htmx-footer"
+                hx-swap="innerHTML"
+                hx-get="{% url 'playlists:forms/new_playlist' %}"
+                type="button"
+                hx-on="htmx:afterRequest: unclick()"
+                class="btn btn-primary">New Playlist</button>
+        {% comment %} hx-on - Keeps the card coloring between reloads {% endcomment %}
+        <div id="playlists"
+             hx-get="{% url 'playlists:cards/playlist' %}"
+             hx-on="htmx:afterRequest: color_card(lastClickedButton)"
+             hx-trigger="refreshPlaylists from:body">
+          {% include "playlists/cards/playlists.html" with playlists=playlists %}
+        </div>
+      </div>
+    </main>
+    {% include "footer.html" %}
+  </body>
+</html>
