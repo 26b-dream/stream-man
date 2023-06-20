@@ -1,0 +1,24 @@
+<div class="toast fade show w-100"
+     role="alert"
+     aria-live="assertive"
+     aria-atomic="true">
+  <div class="toast-header">
+    <strong class="me-auto">
+      {% block "title" %}
+      {% endblock "title" %}
+    </strong>
+    <small>
+      {% for message in messages %}<div class="fade-out {{ message.tags }}">{{ message }}</div>{% endfor %}
+      {% block "subtitle" %}
+      {% endblock "subtitle" %}
+    </small>
+    <button type="button"
+            class="btn-close"
+            data-bs-dismiss="toast"
+            aria-label="Close"></button>
+  </div>
+  <div class="toast-body">
+    {% block "body" %}
+    {% endblock "body" %}
+  </div>
+</div>

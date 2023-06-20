@@ -1,6 +1,12 @@
-<form>
-  {% csrf_token %}
-  {{ form }}
-  <button hx-post="{% url 'playlists:forms/remove_show' playlist_id=playlist.id %}"
-          hx-target="#htmx-footer">Remove Shows</button>
-</form>
+{% extends "toast.html" %}
+{% block "title" %}
+  Remove Shows
+{% endblock "title" %}
+{% block "body" %}
+  <form>
+    {% csrf_token %}
+    {{ form }}
+    <button hx-post="{% url 'playlists:forms/remove_show' playlist_id=playlist.id %}"
+            hx-target="#htmx-footer">Remove Shows</button>
+  </form>
+{% endblock "body" %}

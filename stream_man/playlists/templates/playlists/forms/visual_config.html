@@ -1,12 +1,18 @@
-<form>
-  {% csrf_token %} {{ form }}
-  {% comment %} hx-on - Immediatly update the number of cards per row to make it look correct without changing the order
-  of the episodes {% endcomment %}
-  {% comment %} htmx:xhr:loadend: - Do the update after the form's reponse is given because the value is stored as a
-  cookie in the response of the form {% endcomment %}
-  <button hx-post="{% url 'playlists:forms/visual_config' playlist_id=playlist.id %}"
-          hx-target="#htmx-footer"
-          hx-on="htmx:xhr:loadend: change_cards_per_row(getCookie(`playlist_{{ playlist.id }}_columns`));">
-    Update Visuals
-  </button>
-</form>
+{% extends "toast.html" %}
+{% block "title" %}
+  Visual Config
+{% endblock "title" %}
+{% block "body" %}
+  <form>
+    {% csrf_token %} {{ form }}
+    {% comment %} hx-on - Immediatly update the number of cards per row to make it look correct without changing the order
+    of the episodes {% endcomment %}
+    {% comment %} htmx:xhr:loadend: - Do the update after the form's reponse is given because the value is stored as a
+    cookie in the response of the form {% endcomment %}
+    <button hx-post="{% url 'playlists:forms/visual_config' playlist_id=playlist.id %}"
+            hx-target="#htmx-footer"
+            hx-on="htmx:xhr:loadend: change_cards_per_row(getCookie(`playlist_{{ playlist.id }}_columns`));">
+      Update Visuals
+    </button>
+  </form>
+{% endblock "body" %}

@@ -4,12 +4,7 @@
   real footer for the page{% endcomment %}
   <div class="position-fixed bottom-0 z-1 bg-body-tertiary">
     {% comment %} Button to close the footer {% endcomment %}
-    <button type="button"
-            class="btn-close float-end"
-            aria-label="Close"
-            onclick="delete_htmx_footer_content()"
-            id="footer-close-button"
-            style="display: none"></button>
+    {% comment %} <button type="button" class="btn-close float-end" aria-label="Close" onclick="delete_htmx_footer_content()" id="footer-close-button" style="display: none"></button> {% endcomment %}
     {% comment %} Div who's contents will be replaced by htmx {% endcomment %}
     <div id="htmx-footer"></div>
   </div>

@@ -1,5 +1,12 @@
-<form>
-  {% csrf_token %} {{ form }}
-  <button hx-post="{% url 'playlists:forms/edit_playlist' playlist.id %}"
-          hx-target="#htmx-footer">Update playlist</button>
-</form>
+{% extends "toast.html" %}
+{% block "title" %}
+  Edit {{ playlist.name }}
+{% endblock "title" %}
+{% block "body" %}
+  <form>
+    {{ form }}
+    {% csrf_token %}
+    <button hx-post="{% url 'playlists:forms/edit_playlist' playlist.id %}"
+            hx-target="#htmx-footer">Update playlist</button>
+  </form>
+{% endblock "body" %}
