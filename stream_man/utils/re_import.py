@@ -12,5 +12,5 @@ logging.basicConfig(level=logging.INFO)
 
 for show in Show.objects.all():
     show_scraper = Scraper(show.url)
-    logging.getLogger("Reimport").info("Reimportingasdasd")
+    logging.getLogger("Reimport").info("Reimporting %s", show.url)
     show_scraper.update(minimum_modified_timestamp=datetime.now().astimezone())
