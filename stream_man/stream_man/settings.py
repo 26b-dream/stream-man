@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 
+from django.contrib import messages
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -56,7 +58,7 @@ ROOT_URLCONF = "stream_man.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [(BASE_DIR / "templates")],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -127,3 +129,12 @@ STATICFILES_DIRS = (BASE_DIR / "static",)
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Make messages formatted to match Bootstrap
+MESSAGE_TAGS = {
+    messages.DEBUG: "bg-secondary text-white",
+    messages.INFO: "bg-primary text-white",
+    messages.SUCCESS: "bg-success text-white",
+    messages.WARNING: "bg-warning text-dark",
+    messages.ERROR: "bg-danger text-white",
+}
