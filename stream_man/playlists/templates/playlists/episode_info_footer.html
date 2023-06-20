@@ -1,0 +1,97 @@
+{% extends "toast.html" %}
+{% comment %} TODO: Although perfectly functional the design for this can probably be improved significantly
+{% endcomment %}
+{% load playlist_tags %}
+{% block "title" %}
+    <a href="{% url 'media:show' show_id=episode.season.show.id %}">{{ episode.season.show.name }}</a> >
+    <a href="{% url 'media:season' season_id=episode.season.id %}">{{ episode.season.number }}. {{ episode.season.name }}</a> >
+    <a href="{% url 'media:episode' episode_id=episode.id %}">{{ episode.number }}. {{ episode.name }}</a>
+{% endblock "title" %}
+{% block "body" %}
+    <div class="row">
+        {% comment %} First column is just a image of the episode {% endcomment %}
+        <div class="col">
+            <a href="{{ episode.url }}" target="_blank">
+                {% comment %} Setting the image heigh to 25% of the viewport is makes this work on basically any
+                platform and resolution {% endcomment %}
+                <img src="{{ episode.image_url }}"
+                     style="max-height:25vh"
+                     alt="Episode Image" />
+            </a>
+        </div>
+        {% comment %} Second column which includes episode information and playlist position buttons {% endcomment %}
+        <div class="col-auto">
+            <ul class="list-group">
+                <li class="list-group-item">
+                    <strong>Date:</strong> {{ episode.release_date }}
+                </li>
+                <li class="list-group-item">
+                    <strong>Duration:</strong> {{ episode.duration|seconds_to_time }}
+                </li>
+            </ul>
+            <button onclick="move_card_to_top('card-{{ episode.id }}')"
+                    type="button"
+                    class="btn btn-primary">Top</button>
+            <button onclick="move_card_up('card-{{ episode.id }}')"
+                    type="button"
+                    class="btn btn-primary">Up</button>
+            <button onclick="move_card_down('card-{{ episode.id }}')"
+                    type="button"
+                    class="btn btn-primary">Down</button>
+            <button onclick="move_card_to_bottom('card-{{ episode.id }}')"
+                    type="button"
+                    class="btn btn-primary">Bottom</button>
+        </div>
+        {% comment %} Third column which includes watch information and buttons {% endcomment %}
+        <div class="col-auto">
+            <ul class="list-group">
+                {% if episode.is_watched %}
+                    <li class="list-group-item">Last watched {{ episode.last_watched }}</li>
+                    <li class="list-group-item">Watched {{ episode.watch_count }} time(s)</li>
+                {% else %}
+                    <li class="list-group-item">Never watched</li>
+                {% endif %}
+            </ul>
+            <form id="episode-watched-form">
+                {% csrf_token %}
+                {{ episode|mark_episode_watched }}
+                <br>
+                {% comment %} After being clicked refresh the episode footer to display the show has been watched {% endcomment %}
+                <button class="btn btn-primary"
+                        hx-post="{% url 'media:forms/mark_episode_watched' episode.id %}"
+                        hx-include="#episode-watched-form"
+                        hx-on="htmx:afterRequest: htmx.ajax('GET', '{% url 'playlists:episode_info_footer' episode.id %}', { target:'#htmx-footer', swap:'innerHTML' })">
+                    Watched
+                </button>
+                {% comment %} Mark as watched then open the next episode in the list {% endcomment %}
+                <button class="btn btn-primary"
+                        hx-post="{% url 'media:forms/mark_episode_watched' episode.id %}"
+                        hx-on="htmx:afterRequest: click_next_card('card-{{ episode.id }}');"
+                        hx-include="#episode-watched-form">Next</button>
+                {% comment %} If there is an episode directly follwing this episode from the same show have a special
+                button that will mark the current episode as watched and open the episode footer for the next episode
+                for the show {% endcomment %}
+                {% if episode.next_episode %}
+                    <button class="btn btn-primary"
+                            hx-post="{% url 'media:forms/mark_episode_watched' episode.id %}"
+                            hx-on="htmx:afterRequest: document.querySelector('#card-{{ episode.next_episode.id }}').click()"
+                            hx-include="#episode-watched-form">Continue</button>
+                {% endif %}
+                <button class="btn btn-info"
+                        onclick="click_prev_card('card-{{ episode.id }}');">Previous</button>
+                <button class="btn btn-info"
+                        onclick="click_next_card('card-{{ episode.id }}');">Skip</button>
+                <button hx-vals='{"deleted":"on"}'
+                        class="btn btn-danger"
+                        hx-post="{% url 'media:forms/mark_episode_watched' episode.id %}"
+                        hx-include="#episode-watched-form"
+                        hx-on="htmx:afterRequest: htmx.ajax('GET', '{% url 'playlists:episode_info_footer' episode.id %}', { target:'#htmx-footer', swap:'innerHTML' })">
+                    Unwatch
+                </button>
+            </div>
+        </div>
+    </div>
+{% endblock "body" %}
+{% comment %} Header that has the show, season, and episode names
+Style copied from https://getbootstrap.com/docs/5.3/components/breadcrumb/#dividers with minimal changes {% endcomment %}
+{% comment %} Containter for the dynamic three column design {% endcomment %}
