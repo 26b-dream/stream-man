@@ -25,12 +25,14 @@ license = "AGPL-3.0-only"
 [tool.poetry.dependencies]
 python = "^3.8.1"
 django = "^4.2"
+django-types = "^0.17.0"
 playwright = "^1.34"
 playwright-stealth = "^1.0.5"
 
 django_model_helpers = { git = "https://github.com/26b-dream/django-model-helpers" }
 json_file = { git = "https://github.com/26b-dream/json-file" }
 html_file = { git = "https://github.com/26b-dream/html-file" }
+pillow = "^9.5.0"
 
 [tool.poetry.group.dev]
 optional = true
