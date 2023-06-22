@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 from media.models import Show
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from django.db.models.query import QuerySet
     from media.models import Episode
 
@@ -117,6 +119,7 @@ class Builder:
 
         @classmethod
         def only_new_shows(cls, episodes: QuerySet[Episode]) -> QuerySet[Episode]:
+            """Filter out shows that have at least one episode watched"""
             shows = Show.objects.filter(season__episode__episodewatch__isnull=False).distinct()
             return episodes.exclude(season__show__in=shows)
 
@@ -202,12 +205,12 @@ class Builder:
         acceptable_functions: list[tuple[str, str]] = []
 
         @classmethod
-        def after_every_episode(cls, grouped_episodes: list[tuple[Show, list[Episode]]]) -> bool:
+        def after_every_episode(cls, **kwargs: Any) -> bool:
             """Change the show after every episode"""
             return True
 
         @classmethod
-        def when_show_is_complete(cls, grouped_episodes: list[tuple[Show, list[Episode]]]) -> bool:
+        def when_show_is_complete(cls, **kwargs: Any) -> bool:
             """Change the show when all of the episodes have been added to the playlist"""
             return False
 
