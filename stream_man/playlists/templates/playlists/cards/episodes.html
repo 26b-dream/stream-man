@@ -1,0 +1,34 @@
+{% load playlist_tags %}
+<div class="row">
+    {% for episode in episodes %}
+        <div class="p-2"
+             id="card-{{ episode.id }}"
+             style="width: {% divide 100 columns %}%"
+             onclick="DoubleClickV2('card-{{ episode.id }}', htmx.ajax, {% episode_card_url_1_params request episode %}, window.open, {% episode_card_url_2_params request episode %})">
+            <div id="episode-{{ episode.id }}-mini-form-button" class="card text-wrap">
+                <div class="card-header">
+                    <img src="{{ episode.season.show.favicon_url }}"
+                         alt="Favicon"
+                         style="width:16px;
+                                height:16px">
+                    {{ episode.season.show.name }}
+                </div>
+                {% comment %} Regular lazy loading does not work correctly lazy load {% endcomment %}
+                <img src="{{ episode.thumbnail_url }}" class="card-img-top" loading="lazy">
+                <div class="card-body" style="padding-bottom: 0; padding-top: 0;">
+                    <figcaption class="figure-caption">
+                        {% comment %} TODO: Ability to choose what values are shown here {% endcomment %}
+                        <strong>Season:</strong> {{ episode.season.name }}
+                        <br>
+                        <strong>Episode:</strong> {{ episode.number }}. {{ episode.name }}
+                        <br>
+                        <strong>Date:</strong> {{ episode.release_date }}
+                        <br>
+                        <strong>Duration:</strong> {{ episode.duration|seconds_to_time }}
+                        <br>
+                    </figcaption>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+</div>
