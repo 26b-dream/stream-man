@@ -76,7 +76,7 @@ class Builder:
 
     def _sort_by_show(self, grouped_episodes: list[tuple[Show, list[Episode]]]) -> list[tuple[Show, list[Episode]]]:
         # Sort the shows
-        self.form.show_order_function()(grouped_episodes)
+        self.show_order_function()(grouped_episodes)
 
         # Reverse shows if needed
         if "shows" in self.form.cleaned_data.get("reverse", []):
@@ -221,12 +221,12 @@ class Builder:
         acceptable_functions: list[tuple[str, str]] = []
 
         @classmethod
-        def after_every_episode(cls, **kwargs: Any) -> bool:
+        def after_every_episode(cls, *args: Any, **kwargs: Any) -> bool:
             """Change the show after every episode"""
             return True
 
         @classmethod
-        def when_show_is_complete(cls, **kwargs: Any) -> bool:
+        def when_show_is_complete(cls, *args: Any, **kwargs: Any) -> bool:
             """Change the show when all of the episodes have been added to the playlist"""
             return False
 
