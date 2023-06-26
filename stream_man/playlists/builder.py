@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from media.models import Show
 
 if TYPE_CHECKING:
-    from typing import Any
+    from typing import Any, Callable
 
     from django.db.models.query import QuerySet
     from media.models import Episode
@@ -18,6 +18,22 @@ if TYPE_CHECKING:
 
 class Builder:
     """Class used to filter and sort episodes in a playlist"""
+
+    def show_order_function(self) -> Callable[[list[tuple[Show, list[Episode]]]], None]:
+        """Get the function from the form or the initial value"""
+        return getattr(Builder.ShowOrder, self.form.cleaned_data["show_order"])
+
+    def episode_order_function(self) -> Callable[[QuerySet[Episode]], QuerySet[Episode]]:
+        """Get the function from the form or the initial value"""
+        return getattr(Builder.EpisodeOrder, self.form.cleaned_data["episode_order"])
+
+    def change_show_function(self) -> Callable[[list[tuple[Show, list[Episode]]]], bool]:
+        """Get the function from the form or the initial value"""
+        return getattr(Builder.ChangeShowIf, self.form.cleaned_data["change_show"])
+
+    def rotate_function(self) -> Callable[[list[tuple[Show, list[Episode]]]], None]:
+        """Get the function from the form or the initial value"""
+        return getattr(Builder.Rotate, self.form.cleaned_data["rotate_type"])
 
     def __init__(self, episodes: QuerySet[Episode], form: PlaylistSortForm):
         self.episodes = episodes
@@ -36,7 +52,7 @@ class Builder:
             websites = list(self.form.cleaned_data["websites"])
             self.episodes = self.episodes.filter(season__show__website__in=websites)
 
-        self.episodes = self.form.episode_order_function()(self.episodes)
+        self.episodes = self.episode_order_function()(self.episodes)
         if "episodes" in self.form.cleaned_data.get("reverse", []):
             self.episodes = self.episodes.reverse()
 
@@ -47,7 +63,7 @@ class Builder:
 
         # When the show order is set to none dump all the episodes into a random show object, if all episodes belong to
         # one show it should be functionally the same as having no show filters.
-        if self.form.show_order_function().__name__ == "none":
+        if self.show_order_function().__name__ == "none":
             show = Show.objects.first()
             for episode in self.episodes:
                 grouped_episodes_dict[show].append(episode)
@@ -84,8 +100,8 @@ class Builder:
             if not show_episodes:
                 sorted_grouped_episodes.pop(0)
             # Check when the next show should be used instead of the current one
-            elif self.form.change_show_function()(sorted_grouped_episodes):
-                self.form.rotate_function()(sorted_grouped_episodes)
+            elif self.change_show_function()(sorted_grouped_episodes):
+                self.rotate_function()(sorted_grouped_episodes)
 
         return episode_output
 
