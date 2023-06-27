@@ -1,13 +1,10 @@
 """This module modifies environmental variables so that Django models can be accessed outside of Django itself.
 
-When using this module it needs top be imported before anything Django related is imported. This should be done
-automatically by isort because it is in the root directory and starts with an underscore. If issues arrise in the future
-a proper fix may be found, or more underscores can be added to the name.
+When using this module to be imported before any Django models are imported. With it being located in the root directory
+and starting with an underscore isort should automatically make it import before any Django models.
 
-I hate how sketchy this is, but it is the easiest solution for consistely setting up Django without having a linter tell
-me I am doing something wrong"""
-
-# TODO: Figure out how to move this file into a better location without it breaking
+I hate how sketchy this is, but it is the easiest solution for consistently setting up Django with minimal issues from
+linters"""
 
 from __future__ import annotations
 
@@ -17,7 +14,3 @@ import django
 
 os.environ["DJANGO_SETTINGS_MODULE"] = "stream_man.settings"
 django.setup()
-
-
-def activate_django():
-    """Dummy function to make the import that acitaves Django able to bypass linters"""
