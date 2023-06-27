@@ -12,6 +12,9 @@ disable = [
     "E0307", # invalid-str-returned: Black makes this redundant and it sometimes has false positives
     "E0611", # invalid-str-returned: Black makes this redundant and it sometimes has false positives
     "E0401", # import-error: Black makes this redundant and it has false positives because it does not use PYTHONPATH
+    "C0114", # missing-module-docstring: So often these are just useless, only add them when they are useful
+    "C0115", # missing-class-docstring: So often these are just useless, only add them when they are useful
+    "C0116", # missing-function-docstring: So often these are just useless, only add them when they are useful
 ]
 
 [tool.poetry]
