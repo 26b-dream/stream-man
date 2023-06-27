@@ -10,7 +10,7 @@
         {% comment %} hx-on - unclick because when these buttons are clicked the cards should be unclicked {% endcomment %}
         <button hx-target="#htmx-footer"
                 hx-swap="innerHTML"
-                hx-get="{% url 'playlists:forms/new_playlist' %}"
+                hx-get="{% url 'playlists:forms/new_playlist/form' %}"
                 type="button"
                 hx-on="htmx:afterRequest: unclick()"
                 class="btn btn-primary">New Playlist</button>

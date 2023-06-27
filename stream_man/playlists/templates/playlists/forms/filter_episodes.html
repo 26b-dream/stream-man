@@ -1,0 +1,91 @@
+{% extends "toast.html" %}
+{% comment %} Most of this entire file is based on htmx's "Model Dialogs in Bootstrap" example
+See: https://htmx.org/examples/modal-bootstrap/ 
+This code is mostly copied from the old version of the site so that is why there is modal code for something that is
+clearly not a modal.
+TODO: Replace modal classes with something that makes more sense
+{% endcomment %}
+{% comment %} TODO: For some reason the borders overhang the footer on the right side, it's noticable if you look at it
+but easy to ignore {% endcomment %}
+{% block "title" %}
+    Filter Episodes
+{% endblock "title" %}
+{% block "body" %}
+    <form id="playlist-filter-form">
+        {% csrf_token %}
+        {% comment %} This value will be hidden, but it is required for the form to work {% endcomment %}
+        {{ form.playlist }}
+        <div class="row">
+            <div class="col border text-nowrap">
+                <h5>{{ form.show_order.label }}</h5>
+                {{ form.show_order }}
+                {{ form.show_order.errors }}
+            </div>
+            <div class="col border text-nowrap">
+                <h5>{{ form.episode_order.label }}</h5>
+                {{ form.episode_order }}
+                {{ form.episode_order.errors }}
+            </div>
+        </div>
+        <div class="row">
+            <div class="col border text-nowrap">
+                <h5>{{ form.change_show.label }}</h5>
+                {{ form.change_show }}
+                {{ form.change_show.errors }}
+            </div>
+            <div class="col border text-nowrap">
+                <h5>{{ form.rotate_type.label }}</h5>
+                {{ form.rotate_type }}
+                {{ form.rotate_type.errors }}
+            </div>
+        </div>
+        <div class="row">
+            <div class="col border text-nowrap">
+                <h5>{{ form.filter.label }}</h5>
+                {{ form.filter }}
+                {{ form.filter.errors }}
+            </div>
+            <div class="col border text-nowrap">
+                <h5>{{ form.reverse.label }}</h5>
+                {{ form.reverse }}
+                {{ form.reverse.errors }}
+            </div>
+        </div>
+        <div class="row">
+            <div class="col border text-nowrap">
+                <h5>{{ form.websites.label }}</h5>
+                {% comment %} style="max-height: 10em;" - Extra style to limit the height of the website list so it doesn't
+                stretch the entire form in ugly ways {% endcomment %}
+                <div class="overflow-auto" style="max-height: 10em;">
+                    {{ form.websites }}
+                    {{ form.websites.errors }}
+                </div>
+            </div>
+            <div class="col border text-nowrap">
+                <h5>{{ form.number_of_episodes.label }}</h5>
+                {% comment %} TODO: If you have 20+ different scrapers in one single playlist this will probably look
+            really ugly, in fact anything more than like 5 is kind of ugly, maybe change the style of this in the
+                future to use a dropdown or something {% endcomment %}
+                {{ form.number_of_episodes }}
+                {{ form.number_of_episodes.errors }}
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="sort-episodes-set-defaults-button"
+                    class="btn btn-success"
+                    hx-target="#htmx-footer"
+                    hx-post="{% url 'playlists:forms/playlist_filter/set_defaults' playlist.id %}"
+                    hx-on="click: set_playlist_episode_refresh_filter_values('playlist-filter-form')"
+                    hx-confirm="Are you sure you want to change the playlist defaults?"
+                    type="submit">Set as Playlist Defaults</button>
+            {% comment %} TODO: I have no idea why this value is sent as get request instead of a post request {% endcomment %}
+            <button id="sort-episodes-submit-button"
+                    class="btn btn-success"
+                    hx-vals='{"submit_form": true}'
+                    hx-target="#htmx-footer"
+                    hx-post="{% url 'playlists:forms/playlist_filter/submit' playlist.id %}"
+                    hx-on="click: set_playlist_episode_refresh_filter_values('playlist-filter-form')"
+                    type="submit">Sort Episodes</button>
+        </div>
+    </form>
+{% endblock "body" %}
