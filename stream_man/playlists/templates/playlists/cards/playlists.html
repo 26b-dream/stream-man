@@ -1,0 +1,16 @@
+{% load playlist_tags %}
+<div class="row">
+    {% for playlist in playlists %}
+        <div id="card-{{ playlist.id }}"
+             class="col-auto"
+             style="width: 20%"
+             onclick="DoubleClickV2('card-{{ playlist.id }}', htmx.ajax, {% playlist_card_url_1_params request playlist %}, window.open, {% playlist_card_url_2_params request playlist %})">
+            <div class="card text-wrap">
+                <img src="{{ playlist.thumbnail_url }}" class="card-img-top">
+                <div class="card-body">
+                    <h5 class="card-title">{{ playlist.name }}</h5>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+</div>
