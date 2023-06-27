@@ -1,14 +1,17 @@
 """Contains AbstractScraperClass, which all scraper plugins must inherit and implement"""
 from abc import ABC, abstractmethod
-from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from media.models import Show, Optional
+    from datetime import datetime
 
 
 class AbstractScraperClass(ABC):
     """Abstract class that must be inherited and implemented by plugins for them to be loaded"""
 
     @abstractmethod
-    def website_name(self):
+    def website_name(self) -> str:
         """Name of the website that the scraper is for"""
 
     @classmethod
@@ -37,5 +40,5 @@ class AbstractScraperClass(ABC):
         """
 
     @abstractmethod
-    def show_object(self) -> None:
+    def show_object(self) -> Show:
         """The Show object from the database"""
