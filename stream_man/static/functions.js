@@ -1,16 +1,20 @@
-const htmxFooter = document.querySelector("#htmx-footer");
+const htmxFooter = document.querySelector("#htmx-footer-container");
 const htmxFooterPadding = document.querySelector("#htmx-footer-padding");
 
 // MutationObserver that will make sure the height of the footer padding always matches the footer's height, this will
 // make it so the footer never actually covers up any content on the screen when scrolling to the bottom of the page
 const observer = new MutationObserver((mutations) => {
-    // Make htmFooterPadding the same height as htmxFooter
-    htmxFooterPadding.style.height = `${htmxFooter.clientHeight}px`;
+    // Sometimes htmxFooter.clientHeight will return the wrong value because the footer is still being updated, to
+    // compensate for this, set a delay of 1/4 a second before changing the size, this should make it where the values
+    // properly stay in sync
+    setTimeout(() => {
+        const height = htmxFooter.clientHeight
+        htmxFooterPadding.style.height = `${height}px`;
+    }, 250);
+
 });
-// Configure the observer to watch for changes to the element's child nodes
-const config = { childList: true };
 // Start observing the #htmx-footer element for changes
-observer.observe(htmxFooter, config);
+observer.observe(htmxFooter, { childList: true, subtree: true });
 
 
 // Implements a double click like function on the clicked element
