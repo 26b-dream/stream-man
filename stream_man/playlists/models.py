@@ -8,7 +8,7 @@ from django_model_helpers import auto_unique
 from media.models import Episode, Show
 
 if TYPE_CHECKING:
-    from typing import Any, Optional
+    from typing import Optional
 
     from django.db.models.query import QuerySet
 
@@ -21,7 +21,7 @@ class Playlist(models.Model):
 
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=255, unique=True)
-    shows = models.ManyToManyField(Show, through="PlaylistShow")
+    shows: models.ManyToManyField[Show, Playlist] = models.ManyToManyField(Show, through="PlaylistShow")
     thumbnail = models.ImageField(max_length=255, default=None, blank=True, null=True, upload_to="static/thumbnails")
     default_filter = models.JSONField(default=None, blank=True, null=True)
     deleted = models.BooleanField(default=False)
