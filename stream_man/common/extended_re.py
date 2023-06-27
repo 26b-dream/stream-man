@@ -1,5 +1,3 @@
-"""This module is a wrapper around the re module that adds some extra functionality."""
-
 from __future__ import annotations
 
 # Import all of re so it can be exported, one of the few places were a wildcard import is acceptable
@@ -12,7 +10,7 @@ if TYPE_CHECKING:
 
 
 class StrictPatternFailure(Exception):
-    """Raised when a strict pattern fails to match""" ""
+    """Raised when a strict pattern fails to match"""
 
 
 def strict_search(pattern: Pattern[str] | str, string: str) -> Match[str]:
