@@ -32,11 +32,13 @@ def playlist_filter_json(playlist: Playlist) -> str:
     # Invalid JSON can be saved to the database so extra checks need to be done to make sure the default filter in the
     # database is valid
     try:
-        filter_json = json.loads(playlist.default_filter)
-    # If you go into the admin screen and manually clear the value as a way to reset the default filter a TypeError will
-    # occur
-    except TypeError:
+        # This entire function is literally wrapped in a try clause to compensate for the fact that this line can throw
+        # a TypeError
+        # Unfortunately, pyright is dumb and still shows an error
+        filter_json = json.loads(playlist.default_filter)  # pyright: ignore [reportGeneralTypeIssues]
+    except (TypeError, json.JSONDecodeError):
         filter_json = {}
+
     form = PlaylistSortForm(filter_json)
 
     # If the default filter saved in the database is invalid use the initial values instead
