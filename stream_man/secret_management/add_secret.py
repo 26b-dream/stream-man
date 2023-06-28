@@ -4,18 +4,18 @@ import _activate_django  # pyright: ignore[reportUnusedImport] # pylint: disable
 
 from common.scrapers import Scraper
 
-from common.credential_mangement import dump_credentials, load_credentials, CREDENTIALS_FILE
+from common.credential_mangement import Credentials
 
 
 def main() -> None:
     password = getpass("Credentials password")
 
     # If the credential file doesn't exist create it
-    if not CREDENTIALS_FILE.exists():
-        dump_credentials({}, password)
+    if not Credentials.CREDENTIALS_FILE.exists():
+        Credentials.dump_credentials({}, password)
 
     # Load credentials
-    credentials = load_credentials(password)
+    credentials = Credentials.load_credentials(password)
 
     # Display a list of scrapers
     for i, credential_keys in enumerate(Scraper.credential_keys()):
@@ -34,7 +34,7 @@ def main() -> None:
 
         credentials[scraper_name][key] = getpass(f"{scraper_name}: {key}:")
 
-    dump_credentials(credentials, password)
+    Credentials.dump_credentials(credentials, password)
 
 
 if __name__ == "__main__":
