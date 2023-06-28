@@ -26,8 +26,9 @@ if TYPE_CHECKING:
 class ScraperShared:
     """Shared code for streaming scraper"""
 
+    @classmethod
     def playwright_browser(
-        self,
+        cls,
         playwright: Playwright,
         user_agent: str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/111.0",
     ) -> BrowserContext:
@@ -90,6 +91,8 @@ class ScraperShowShared(ABC, ScraperShared):
     def __init__(self, show_url: str) -> None:
         self.show_id = str(re.strict_search(self.SHOW_URL_REGEX, show_url).group("show_id"))
         self.show_info = Show().get_or_new(show_id=self.show_id, website=self.WEBSITE)[0]
+        self.show_json_path = JSONFile(DOWNLOADED_FILES_DIR, self.WEBSITE, "show", f"{self.show_id}.json")
+        self.show_html_path = HTMLFile(DOWNLOADED_FILES_DIR, self.WEBSITE, "show", f"{self.show_id}.html")
 
     @classmethod
     def website_name(cls) -> str:
@@ -103,14 +106,6 @@ class ScraperShowShared(ABC, ScraperShared):
             return f"{self.WEBSITE}.{self.show_info.name}"
 
         return f"{self.WEBSITE}.{self.show_id}"
-
-    @lru_cache(maxsize=1024)  # Value will never change
-    def show_html_path(self) -> HTMLFile:
-        return HTMLFile(DOWNLOADED_FILES_DIR, self.WEBSITE, "show", f"{self.show_id}.html")
-
-    @lru_cache(maxsize=1024)  # Value will never change
-    def show_json_path(self) -> JSONFile:
-        return JSONFile(DOWNLOADED_FILES_DIR, self.WEBSITE, "show", f"{self.show_id}.json")
 
     def update(
         self, minimum_info_timestamp: Optional[datetime] = None, minimum_modified_timestamp: Optional[datetime] = None

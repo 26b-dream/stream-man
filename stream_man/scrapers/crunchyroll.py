@@ -77,10 +77,10 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
         Returns:
             `list[ExtendedPath]`: List of outdated show files, empty if all files are up to date"""
         outdated_files: list[ExtendedPath] = []
-        if self.show_html_path().outdated(minimum_timestamp):
-            outdated_files.append(self.show_html_path())
-        if self.show_json_path().outdated(minimum_timestamp):
-            outdated_files.append(self.show_json_path())
+        if self.show_html_path.outdated(minimum_timestamp):
+            outdated_files.append(self.show_html_path)
+        if self.show_json_path.outdated(minimum_timestamp):
+            outdated_files.append(self.show_json_path)
         if self.show_seasons_json_path.outdated(minimum_timestamp):
             outdated_files.append(self.show_seasons_json_path)
 
@@ -113,7 +113,7 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
         if f"series/{self.show_id}?" in response.url:
             # Example URL: https://www.crunchyroll.com/content/v2/cms/series/GEXH3W4JP?locale=en-US
             raw_json = response.json()
-            path = self.show_json_path()
+            path = self.show_json_path
             path.write(json.dumps(raw_json))
 
         elif f"series/{self.show_id}/seasons?" in response.url:
@@ -165,9 +165,9 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
                 # Click first season
                 page.locator("div.seasons-select div[role='button']").first.click()
 
-            self.show_html_path().write(page.content())
+            self.show_html_path.write(page.content())
 
-            self.playwright_wait_for_files(page, minimum_timestamp, self.show_json_path(), self.show_seasons_json_path)
+            self.playwright_wait_for_files(page, minimum_timestamp, self.show_json_path, self.show_seasons_json_path)
 
     def download_seasons(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
         """Download all of the season files if they are outdated or do not exist"""
@@ -232,7 +232,7 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
     ) -> None:
         """Import the show information, does not attempt to download or update the information"""
         if self.show_info.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
-            parsed_show = self.show_json_path().parsed_cached()["data"][0]
+            parsed_show = self.show_json_path.parsed_cached()["data"][0]
 
             self.show_info.name = parsed_show["title"]
             self.show_info.description = parsed_show["description"]
@@ -248,7 +248,7 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
             self.show_info.image_url = parsed_show["images"]["poster_wide"][0][-1]["source"]
             self.show_info.favicon_url = self.FAVICON_URL
             self.show_info.deleted = False
-            self.show_info.add_timestamps_and_save(self.show_html_path())
+            self.show_info.add_timestamps_and_save(self.show_html_path)
 
     def import_seasons(
         self,
