@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
-import _activate_django  # pyright: ignore[reportUnusedImport] - Modifies environment variables
+import _activate_django  # pyright: ignore[reportUnusedImport] # pylint: disable=W0611
 from common.scrapers import Scraper
 from media.models import Show
 

@@ -1,6 +1,6 @@
 # TODO: Eventually allow configuration through the web interface
 from getpass import getpass
-import _activate_django  # pyright: ignore[reportUnusedImport] # pylint: disable="W0611"
+import _activate_django  # pyright: ignore[reportUnusedImport] # pylint: disable=W0611
 
 from common.scrapers import Scraper
 

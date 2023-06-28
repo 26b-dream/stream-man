@@ -3,16 +3,20 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
-import _activate_django  # pyright: ignore[reportUnusedImport] - Modifies environment variables
-from common.scrapers import Scraper
+import _activate_django  # pyright: ignore[reportUnusedImport] # pylint: disable=W0611
+from common.scrapers import InvalidURLError, Scraper
 from playlists.models import Playlist, PlaylistImportQueue, PlaylistShow
 
 logging.basicConfig(level=logging.INFO)
 
 for show in PlaylistImportQueue.objects.all():
     playlist = Playlist.objects.get(id=show.playlist.id)
-    show_scraper = Scraper(show.url)
 
+    try:
+        show_scraper = Scraper(show.url)
+    except InvalidURLError:
+        logging.getLogger("Error").info("Invalid URL %s", show.url)
+        continue
     logging.getLogger("Importing").info("Importing %s", show.url)
 
     show_scraper.update(minimum_modified_timestamp=datetime.now().astimezone())
