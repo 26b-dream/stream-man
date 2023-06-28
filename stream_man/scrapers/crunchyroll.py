@@ -36,54 +36,17 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
     #   https://www.crunchyroll.com/series/G63VW2VWY/non-non-biyori
     SHOW_URL_REGEX = re.compile(r"^(?:https:\/\/w?w?w?.?crunchyroll\.com)?\/series\/*(?P<show_id>.*?)(?:\/|$)")
 
-    def website_name(self) -> str:
-        """Name of the website"""
-        return self.WEBSITE
-
-    @classmethod
-    def is_valid_show_url(cls, show_url: str) -> bool:
-        """Check if a URL is a valid show URL for a specific scraper"""
-        return bool(re.search(cls.SHOW_URL_REGEX, show_url))
-
-    def __init__(self, show_url: str) -> None:
-        self.show_id = str(re.strict_search(self.SHOW_URL_REGEX, show_url).group("show_id"))
-        self.show_info = Show().get_or_new(show_id=self.show_id, website=self.WEBSITE)[0]
-
-    def show_object(self) -> Show:
-        """The Show object from the database"""
-        return self.show_info
-
-    def logger_identifier(self) -> str:
-        """The best possibel string for identifying a show given the known information"""
-        if self.show_info.name:
-            return f"{self.WEBSITE}.{self.show_info.name}"
-
-        return f"{self.WEBSITE}.{self.show_id}"
-
     @lru_cache(maxsize=1024)  # Value will never change
     def show_url(self) -> str:
-        """URL for the show"""
         return f"{self.DOMAIN}/series/{self.show_id}"
 
     @lru_cache(maxsize=1024)  # Value will never change
     def episode_url(self, episode: Episode) -> str:
-        """URL for a specific episode"""
         return f"{self.DOMAIN}/watch/{episode.episode_id}"
 
     @lru_cache(maxsize=1024)  # Value will never change
-    def show_html_path(self) -> HTMLFile:
-        """Path for the HTML file for the show"""
-        return HTMLFile(DOWNLOADED_FILES_DIR, self.WEBSITE, "show", f"{self.show_id}.html")
-
-    @lru_cache(maxsize=1024)  # Value will never change
     def season_html_path(self, season_id: str) -> HTMLFile:
-        """Path for HTML file for a specific season"""
         return HTMLFile(DOWNLOADED_FILES_DIR, self.WEBSITE, "show_season", f"{season_id}.html")
-
-    @lru_cache(maxsize=1024)  # Value will never change
-    def show_json_path(self) -> JSONFile:
-        """Path for the JSON file for the show"""
-        return JSONFile(DOWNLOADED_FILES_DIR, self.WEBSITE, "show", f"{self.show_id}.json")
 
     @lru_cache(maxsize=1024)  # Value will never change
     def show_seasons_json_path(self) -> JSONFile:
@@ -116,12 +79,8 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
     def any_show_file_outdated(self, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
         """Check if any of the downloaded show files are missing or outdated
 
-        Args:
-            minimum_timestamp (Optional[datetime], optional): The minimum timestamp the files must have. Defaults to
-            None.
-
         Returns:
-            list[ExtendedPath]: List of outdated show files, empty if all files are up to date"""
+            `list[ExtendedPath]`: List of outdated show files, empty if all files are up to date"""
         outdated_files: list[ExtendedPath] = []
         if self.show_html_path().outdated(minimum_timestamp):
             outdated_files.append(self.show_html_path())
@@ -137,12 +96,9 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
     ) -> list[ExtendedPath]:
         """Check if any of the downloaded season files are missing or outdated
 
-        Args:
-            minimum_timestamp (Optional[datetime], optional): The minimum timestamp the files must have. Defaults to
-            None.
-
         Returns:
-            list[ExtendedPath]: List of outdated season files, empty if all files are up to date"""
+            `list[ExtendedPath]`: List of outdated season files, empty if all files are up to date"""
+
         season_html_path = self.season_html_path(season_id)
         season_json_path = self.season_episodes_json_path(season_id)
 
@@ -156,16 +112,9 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
 
         return output
 
-    def update(
-        self, minimum_info_timestamp: Optional[datetime] = None, minimum_modified_timestamp: Optional[datetime] = None
-    ) -> None:
-        """Update the information for the show"""
-        logging.getLogger(self.logger_identifier()).info("Updating %s", self.show_info)
-        self.download_all(minimum_info_timestamp)
-        self.import_all(minimum_info_timestamp, minimum_modified_timestamp)
-
     def save_playwright_files(self, response: Response) -> None:
-        """Sorts the files that playwright recieves based on the URL of the file"""
+        """Sorts the files that playwright recieves based on the URL of the file,  this is not a function that is
+        directly called but is set as the function playwright will call when it recieves a response."""
         if f"series/{self.show_id}?" in response.url:
             # Example URL: https://www.crunchyroll.com/content/v2/cms/series/GEXH3W4JP?locale=en-US
             raw_json = response.json()
@@ -287,7 +236,7 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
-        """Import the show information if it is outdated or does not exist"""
+        """Import the show information, does not attempt to download or update the information"""
         if self.show_info.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
             parsed_show = self.show_json_path().parsed_cached()["data"][0]
 
@@ -298,6 +247,7 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
             # [0] is the first poster_wide design (as far as I can tell there is always just one)
             # [0][0] the first image listed is the lowest resolution
             # [0][1] the last image listed is the highest resolution
+            # TODO: Get the favicon dynamically from the website
             # TODO: poster_long may be a better option depending on how the website lays out the information
             # TODO: Higher resolutions may be preferable depending on website layout
             self.show_info.thumbnail_url = parsed_show["images"]["poster_wide"][0][0]["source"]
@@ -311,7 +261,7 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
-        """Import the season information if it is outdated or does not exist"""
+        """Import the season information, does not attempt to download or update the information"""
         show_seasons_json_parsed = self.show_seasons_json_path().parsed_cached()
 
         for sort_order, season in enumerate(show_seasons_json_parsed["data"]):
@@ -334,7 +284,7 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
-        """Import the episode information if it is outdated or does not exist"""
+        """Import the episode information, does not attempt to download or update the information"""
         show_seasons_json_parsed = self.show_seasons_json_path().parsed_cached()["data"]
 
         for season in show_seasons_json_parsed:

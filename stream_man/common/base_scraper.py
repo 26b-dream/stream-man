@@ -5,11 +5,19 @@ from __future__ import annotations
 from datetime import datetime
 from time import sleep
 from typing import TYPE_CHECKING
+import logging
+from abc import ABC, abstractmethod
 
+import common.extended_re as re
 from common.constants import DOWNLOADED_FILES_DIR
 from extended_path import ExtendedPath
+from media.models import Show
+from functools import lru_cache
+from html_file import HTMLFile
+from json_file import JSONFile
 
 if TYPE_CHECKING:
+    from re import Pattern
     from typing import Optional
 
     from playwright.sync_api._generated import BrowserContext, Page, Playwright
@@ -68,5 +76,60 @@ class ScraperUpdateShared(ScraperShared):
     """Shared code for scraping update information"""
 
 
-class ScraperShowShared(ScraperShared):
+class ScraperShowShared(ABC, ScraperShared):
     """Shared code for scraping show information"""
+
+    SHOW_URL_REGEX: Pattern[str]
+    WEBSITE: str
+
+    @classmethod
+    def is_valid_show_url(cls, show_url: str) -> bool:
+        """Check if a URL is a valid show URL for a specific scraper"""
+        return bool(re.search(cls.SHOW_URL_REGEX, show_url))
+
+    def __init__(self, show_url: str) -> None:
+        self.show_id = str(re.strict_search(self.SHOW_URL_REGEX, show_url).group("show_id"))
+        self.show_info = Show().get_or_new(show_id=self.show_id, website=self.WEBSITE)[0]
+
+    @classmethod
+    def website_name(cls) -> str:
+        return cls.WEBSITE
+
+    def show_object(self) -> Show:
+        return self.show_info
+
+    def logger_identifier(self) -> str:
+        if self.show_info.name:
+            return f"{self.WEBSITE}.{self.show_info.name}"
+
+        return f"{self.WEBSITE}.{self.show_id}"
+
+    @lru_cache(maxsize=1024)  # Value will never change
+    def show_html_path(self) -> HTMLFile:
+        return HTMLFile(DOWNLOADED_FILES_DIR, self.WEBSITE, "show", f"{self.show_id}.html")
+
+    @lru_cache(maxsize=1024)  # Value will never change
+    def show_json_path(self) -> JSONFile:
+        return JSONFile(DOWNLOADED_FILES_DIR, self.WEBSITE, "show", f"{self.show_id}.json")
+
+    def update(
+        self, minimum_info_timestamp: Optional[datetime] = None, minimum_modified_timestamp: Optional[datetime] = None
+    ) -> None:
+        logging.getLogger(self.logger_identifier()).info("Updating %s", self.show_info)
+        self.download_all(minimum_info_timestamp)
+        self.import_all(minimum_info_timestamp, minimum_modified_timestamp)
+
+    @abstractmethod
+    def import_all(
+        self,
+        minimum_info_timestamp: Optional[datetime] = None,
+        minimum_modified_timestamp: Optional[datetime] = None,
+    ) -> None:
+        """Imports all of the information for a show without downloading any of the files"""
+
+    @abstractmethod
+    def download_all(
+        self,
+        minimum_timestamp: Optional[datetime] = None,
+    ) -> None:
+        """Downloads all of the information for a show"""
