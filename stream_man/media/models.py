@@ -156,7 +156,6 @@ class UpdateQue(models.Model):
     This model will track when the calendar was last used to update information"""
 
     class Meta:  # pyright: ignore [reportIncompatibleVariableOverride]
-        db_table = "update_que"
         constraints = [auto_unique("website")]
 
     id = models.AutoField(primary_key=True)
