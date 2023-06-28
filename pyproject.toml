@@ -15,6 +15,7 @@ disable = [
     "C0114", # missing-module-docstring: So often these are just useless, only add them when they are useful
     "C0115", # missing-class-docstring: So often these are just useless, only add them when they are useful
     "C0116", # missing-function-docstring: So often these are just useless, only add them when they are useful
+    "E0601", # used-before-assignment: Pylance is more reliable because Pylint does not understand "if TYPE_CHECKING:"
 ]
 
 [tool.poetry]
@@ -36,6 +37,7 @@ django_model_helpers = { git = "https://github.com/26b-dream/django-model-helper
 json_file = { git = "https://github.com/26b-dream/json-file" }
 html_file = { git = "https://github.com/26b-dream/html-file" }
 pillow = "^9.5.0"
+cryptography = "^41.0.1"
 
 [tool.poetry.group.dev]
 optional = true

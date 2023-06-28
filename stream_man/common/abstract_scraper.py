@@ -1,17 +1,19 @@
 """Contains AbstractScraperClass, which all scraper plugins must inherit and implement"""
+# @abstractmethod Seems to break if TYPE_CHECKING, so just do a full import of everything
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from media.models import Show, Optional
-    from datetime import datetime
+from typing import Optional
+from datetime import datetime
+from media.models import Show
 
 
 class AbstractScraperClass(ABC):
     """Abstract class that must be inherited and implemented by plugins for them to be loaded"""
 
+    # I thought about making this a class constant, but having it as a function gives you the freedom to make a scraper
+    # that supports multiple websites at once
+    @classmethod
     @abstractmethod
-    def website_name(self) -> str:
+    def website_name(cls) -> str:
         """Name of the website that the scraper is for"""
 
     @classmethod
@@ -42,3 +44,9 @@ class AbstractScraperClass(ABC):
     @abstractmethod
     def show_object(self) -> Show:
         """The Show object from the database"""
+
+    @classmethod
+    def credential_keys(cls) -> list[str]:
+        """A list of values where each value is the name of a credential for the scraper. If no credentials are required
+        this function does not need to be implemnented."""
+        return []
