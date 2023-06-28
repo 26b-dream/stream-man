@@ -13,7 +13,6 @@ from common.base_scraper import ScraperShowShared
 from common.constants import DOWNLOADED_FILES_DIR
 from django.db import transaction
 from extended_path import ExtendedPath
-from html_file import HTMLFile
 from json_file import JSONFile
 from media.models import Episode, Season, Show
 from playwright.sync_api import sync_playwright
@@ -45,10 +44,6 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
         )
 
     @lru_cache(maxsize=1024)  # Value will never change
-    def season_html_path(self, season_id: str) -> HTMLFile:
-        return HTMLFile(DOWNLOADED_FILES_DIR, self.WEBSITE, "show_season", f"{season_id}.html")
-
-    @lru_cache(maxsize=1024)  # Value will never change
     def season_episodes_json_path(self, season_id: str) -> JSONFile:
         """Path for the JSON file that lists all of the episodes for a specific season"""
         return JSONFile(DOWNLOADED_FILES_DIR, self.WEBSITE, "season_episodes", f"{season_id}.json")
@@ -77,8 +72,6 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
         Returns:
             `list[ExtendedPath]`: List of outdated show files, empty if all files are up to date"""
         outdated_files: list[ExtendedPath] = []
-        if self.show_html_path.outdated(minimum_timestamp):
-            outdated_files.append(self.show_html_path)
         if self.show_json_path.outdated(minimum_timestamp):
             outdated_files.append(self.show_json_path)
         if self.show_seasons_json_path.outdated(minimum_timestamp):
@@ -94,15 +87,12 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
         Returns:
             `list[ExtendedPath]`: List of outdated season files, empty if all files are up to date"""
 
-        season_html_path = self.season_html_path(season_id)
         season_json_path = self.season_episodes_json_path(season_id)
 
         output: list[ExtendedPath] = []
 
         # If the files are up to date nothing needs to be done
-        if season_html_path.outdated(minimum_timestamp):
-            output.append(season_html_path)
-        elif season_json_path.outdated(minimum_timestamp):
+        if season_json_path.outdated(minimum_timestamp):
             output.append(season_json_path)
 
         return output
@@ -165,8 +155,6 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
                 # Click first season
                 page.locator("div.seasons-select div[role='button']").first.click()
 
-            self.show_html_path.write(page.content())
-
             self.playwright_wait_for_files(page, minimum_timestamp, self.show_json_path, self.show_seasons_json_path)
 
     def download_seasons(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
@@ -193,8 +181,6 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
                 # Wait for files to exist
                 episodes_json_path = self.season_episodes_json_path(season["id"])
                 self.playwright_wait_for_files(page, minimum_timestamp, episodes_json_path)
-
-                self.season_html_path(season["id"]).write(page.content())
 
     def season_button(self, page: Page, season: dict[str, str]) -> ElementHandle:
         """Finds the button that will go to the season page"""
@@ -248,7 +234,7 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
             self.show_info.image_url = parsed_show["images"]["poster_wide"][0][-1]["source"]
             self.show_info.favicon_url = self.FAVICON_URL
             self.show_info.deleted = False
-            self.show_info.add_timestamps_and_save(self.show_html_path)
+            self.show_info.add_timestamps_and_save(self.show_json_path)
 
     def import_seasons(
         self,
