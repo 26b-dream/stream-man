@@ -17,6 +17,7 @@ from html_file import HTMLFile
 from json_file import JSONFile
 from media.models import Episode, Season, Show
 from playwright.sync_api import sync_playwright
+from playwright_stealth import stealth_sync
 
 if TYPE_CHECKING:
     from typing import Optional
@@ -137,6 +138,7 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
             with sync_playwright() as playwright:
                 # Create a new page that will autoamtically save JSON files when they are requested
                 page = self.playwright_browser(playwright).new_page()
+                stealth_sync(page)
                 page.on("response", self.save_playwright_files)
 
                 self.download_show(page, minimum_timestamp)
