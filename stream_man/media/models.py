@@ -102,6 +102,10 @@ class Episode(ModelWithIdAndTimestamp, GetOrNew):
     thumbnail_url = models.CharField(max_length=255)
     description = models.TextField()
     release_date = models.DateTimeField()
+    """The date that the episode was made available for streaming, this value is useful for determining when to update a
+    series"""
+    air_date = models.DateTimeField()
+    """THe date that the episode originally aired, this is the value that will be displayed to the user"""
     duration = models.PositiveSmallIntegerField()
     """Duration stored in number of seconds"""
     deleted = models.BooleanField()
