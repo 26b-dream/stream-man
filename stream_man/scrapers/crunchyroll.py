@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
@@ -24,9 +24,7 @@ if TYPE_CHECKING:
     from playwright.sync_api._generated import ElementHandle, Page, Response
 
 
-class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
-    """PLugin for Crunchyroll"""
-
+class CrunchyRollSeries(ScraperShowShared, AbstractScraperClass):
     WEBSITE = "Crunchyroll"
     DOMAIN = "https://www.crunchyroll.com"
     FAVICON_URL = DOMAIN + "/favicons/favicon-32x32.png"
@@ -34,7 +32,12 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
     # Example show URLs
     #   https://www.crunchyroll.com/series/G63VW2VWY
     #   https://www.crunchyroll.com/series/G63VW2VWY/non-non-biyori
-    SHOW_URL_REGEX = re.compile(r"^(?:https:\/\/w?w?w?.?crunchyroll\.com)?\/series\/*(?P<show_id>.*?)(?:\/|$)")
+    #   TODO: Movies use a watvh URL instead of a series URL
+    #       https://www.crunchyroll.com/watch/G25FVD45Q/009-1-the-end-of-the-beginning
+    # TODO: What if the user is a dummy and puts an episode URL instead of a show URL?
+    SHOW_URL_REGEX = re.compile(
+        r"^(?:https:\/\/w?w?w?.?crunchyroll\.com)?\/(?:series|watch)\/*(?P<show_id>.*?)(?:\/|$)"
+    )
 
     def __init__(self, show_url: str) -> None:
         super().__init__(show_url)
@@ -42,11 +45,6 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
         self.show_seasons_json_path = JSONFile(
             DOWNLOADED_FILES_DIR, self.WEBSITE, "show_seasons", f"{self.show_id}.json"
         )
-
-    @lru_cache(maxsize=1024)  # Value will never change
-    def season_episodes_json_path(self, season_id: str) -> JSONFile:
-        """Path for the JSON file that lists all of the episodes for a specific season"""
-        return JSONFile(DOWNLOADED_FILES_DIR, self.WEBSITE, "season_episodes", f"{season_id}.json")
 
     def any_file_is_outdated(self, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
         """Check if any of the downloaded files are missing or outdated
@@ -57,6 +55,7 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
 
         Returns:
             list[ExtendedPath]: List of outdated files, empty if all files are up to date"""
+
         output = self.any_show_file_outdated(minimum_timestamp)
 
         if self.show_seasons_json_path.exists():
@@ -69,8 +68,13 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
     def any_show_file_outdated(self, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
         """Check if any of the downloaded show files are missing or outdated
 
+        Args:
+            minimum_timestamp (Optional[datetime], optional): The minimum timestamp the files must have. Defaults to
+            None.
+
         Returns:
-            `list[ExtendedPath]`: List of outdated show files, empty if all files are up to date"""
+            list[ExtendedPath]: List of outdated show files, empty if all files are up to date"""
+
         outdated_files: list[ExtendedPath] = []
         if self.show_json_path.outdated(minimum_timestamp):
             outdated_files.append(self.show_json_path)
@@ -84,22 +88,17 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
     ) -> list[ExtendedPath]:
         """Check if any of the downloaded season files are missing or outdated
 
+        Args:
+            minimum_timestamp (Optional[datetime], optional): The minimum timestamp the files must have. Defaults to
+            None.
+
         Returns:
-            `list[ExtendedPath]`: List of outdated season files, empty if all files are up to date"""
+            list[ExtendedPath]: List of outdated season files, empty if all files are up to date"""
 
-        season_json_path = self.season_episodes_json_path(season_id)
-
-        output: list[ExtendedPath] = []
-
-        # If the files are up to date nothing needs to be done
-        if season_json_path.outdated(minimum_timestamp):
-            output.append(season_json_path)
-
-        return output
+        season_json_path = self.season_json_path(season_id)
+        return [season_json_path] if season_json_path.outdated(minimum_timestamp) else []
 
     def save_playwright_files(self, response: Response) -> None:
-        """Sorts the files that playwright recieves based on the URL of the file,  this is not a function that is
-        directly called but is set as the function playwright will call when it recieves a response."""
         if f"series/{self.show_id}?" in response.url:
             # Example URL: https://www.crunchyroll.com/content/v2/cms/series/GEXH3W4JP?locale=en-US
             raw_json = response.json()
@@ -115,7 +114,7 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
         elif "episodes?" in response.url:
             # Example URL: https://www.crunchyroll.com/content/v2/cms/seasons/GYQ4MQ496/episodes?locale=en-US
             season_id = re.strict_search("seasons/(.*)/episodes?", response.url).group(1)
-            path = self.season_episodes_json_path(season_id)
+            path = self.season_json_path(season_id)
             raw_json = response.json()
             path.write(json.dumps(raw_json))
 
@@ -145,16 +144,6 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
 
             page.goto(self.show_url, wait_until="networkidle")
 
-            # Make sure the page is for the first season
-            # TODO: Can this be done without clicking something?
-            if page.query_selector("div[class='season-info']"):
-                # Open season selector
-                page.locator("div[class='season-info']").click()
-                page.wait_for_load_state("networkidle")
-
-                # Click first season
-                page.locator("div.seasons-select div[role='button']").first.click()
-
             self.playwright_wait_for_files(page, minimum_timestamp, self.show_json_path, self.show_seasons_json_path)
 
     def download_seasons(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
@@ -166,20 +155,22 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
                 logging.getLogger(self.logger_identifier()).info("Scraping Season: %s", season["title"])
                 # All season pages have to be downloaded from the show page so open the show page
                 # Only do this one time, all later pages can reuse existing page
-                if not self.show_url in page.url:
+                if self.show_url not in page.url:
                     page.goto(self.show_url, wait_until="networkidle")
 
                 # Season selector only exists for shows with multiple seasons
                 if page.query_selector("div[class='season-info']"):
                     # Open season selector
                     page.locator("div[class='season-info']").click()
-                    page.wait_for_load_state("networkidle")
+
+                    # Sleep for 5 seconds to avoid being banned
+                    page.wait_for_timeout(5000)
 
                     # Click season
                     self.season_button(page, season).click()
 
                 # Wait for files to exist
-                episodes_json_path = self.season_episodes_json_path(season["id"])
+                episodes_json_path = self.season_json_path(season["id"])
                 self.playwright_wait_for_files(page, minimum_timestamp, episodes_json_path)
 
     def season_button(self, page: Page, season: dict[str, str]) -> ElementHandle:
@@ -198,7 +189,6 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
-        """Import all of the information for the show, seasons, and episodes"""
         logging.getLogger(self.logger_identifier()).info("Importing information")
 
         # Mark everything as deleted and let importing mark it as not deleted because this is the easiest way to
@@ -210,6 +200,7 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
         self.import_show(minimum_info_timestamp, minimum_modified_timestamp)
         self.import_seasons(minimum_info_timestamp, minimum_modified_timestamp)
         self.import_episodes(minimum_info_timestamp, minimum_modified_timestamp)
+        self.update_update_at()
 
     def import_show(
         self,
@@ -245,7 +236,7 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
         show_seasons_json_parsed = self.show_seasons_json_path.parsed_cached()
 
         for sort_order, season in enumerate(show_seasons_json_parsed["data"]):
-            season_json_path = self.season_episodes_json_path(season["id"])
+            season_json_path = self.season_json_path(season["id"])
             season_json_parsed = season_json_path.parsed_cached()
             parsed_episode = season_json_parsed["data"][0]
 
@@ -268,7 +259,7 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
         show_seasons_json_parsed = self.show_seasons_json_path.parsed_cached()["data"]
 
         for season in show_seasons_json_parsed:
-            season_json_parsed = self.season_episodes_json_path(season["id"]).parsed_cached()
+            season_json_parsed = self.season_json_path(season["id"]).parsed_cached()
             season_info = Season().get_or_new(season_id=season["id"], show=self.show_info)[0]
 
             for i, episode in enumerate(season_json_parsed["data"]):
@@ -282,7 +273,10 @@ class CrunchyrollShow(ScraperShowShared, AbstractScraperClass):
                     episode_info.duration = episode["duration_ms"] / 1000
                     episode_info.url = f"{self.DOMAIN}/watch/{episode['id']}"
 
-                    episode_info.release_date = datetime.strptime(episode["episode_air_date"], "%Y-%m-%dT%H:%M:%S%z")
+                    episode_info.air_date = datetime.strptime(episode["episode_air_date"], "%Y-%m-%dT%H:%M:%S%z")
+                    episode_info.release_date = datetime.strptime(
+                        episode["premium_available_date"], "%Y-%m-%dT%H:%M:%S%z"
+                    )
                     # Every now and then a show just won't have thumbnails
                     # See: https://beta.crunchyroll.com/series/G79H23VD4/im-kodama-kawashiri (May be updated later)
                     if episode_images := episode.get("images"):
