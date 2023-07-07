@@ -31,9 +31,6 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
     # Example show URLs
     #   https://www.crunchyroll.com/series/G63VW2VWY
     #   https://www.crunchyroll.com/series/G63VW2VWY/non-non-biyori
-    #   TODO: Movies use a watvh URL instead of a series URL
-    #       https://www.crunchyroll.com/watch/G25FVD45Q/009-1-the-end-of-the-beginning
-    # TODO: What if the user is a dummy and puts an episode URL instead of a show URL?
     SHOW_URL_REGEX = re.compile(r"^(?:https:\/\/w?w?w?.?crunchyroll\.com)?\/series\/*(?P<show_id>.*?)(?:\/|$)")
 
     def __init__(self, show_url: str) -> None:
