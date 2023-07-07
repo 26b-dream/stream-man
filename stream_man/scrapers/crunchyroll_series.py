@@ -41,15 +41,7 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
         )
 
     def any_file_is_outdated(self, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
-        """Check if any of the downloaded files are missing or outdated
-
-        Args:
-            minimum_timestamp (Optional[datetime], optional): The minimum timestamp the files must have. Defaults to
-            None.
-
-        Returns:
-            list[ExtendedPath]: List of outdated files, empty if all files are up to date"""
-
+        """Check if any of the downloaded files are missing or outdated"""
         output = self.any_show_file_outdated(minimum_timestamp)
 
         if self.show_seasons_json_path.exists():
@@ -60,14 +52,7 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
         return output
 
     def any_show_file_outdated(self, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
-        """Check if any of the downloaded show files are missing or outdated
-
-        Args:
-            minimum_timestamp (Optional[datetime], optional): The minimum timestamp the files must have. Defaults to
-            None.
-
-        Returns:
-            list[ExtendedPath]: List of outdated show files, empty if all files are up to date"""
+        """Check if any of the downloaded show files are missing or outdated"""
 
         outdated_files: list[ExtendedPath] = []
         if self.show_json_path.outdated(minimum_timestamp):
@@ -80,19 +65,13 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
     def any_season_file_is_outdated(
         self, season_id: str, minimum_timestamp: Optional[datetime] = None
     ) -> list[ExtendedPath]:
-        """Check if any of the downloaded season files are missing or outdated
-
-        Args:
-            minimum_timestamp (Optional[datetime], optional): The minimum timestamp the files must have. Defaults to
-            None.
-
-        Returns:
-            list[ExtendedPath]: List of outdated season files, empty if all files are up to date"""
+        """Check if any of the downloaded season files are missing or outdated"""
 
         season_json_path = self.season_json_path(season_id)
         return [season_json_path] if season_json_path.outdated(minimum_timestamp) else []
 
     def save_playwright_files(self, response: Response) -> None:
+        """Function that is called on all of the reesponses that the playwright browser gets"""
         if f"series/{self.show_id}?" in response.url:
             # Example URL: https://www.crunchyroll.com/content/v2/cms/series/GEXH3W4JP?locale=en-US
             raw_json = response.json()
@@ -107,13 +86,12 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
 
         elif "episodes?" in response.url:
             # Example URL: https://www.crunchyroll.com/content/v2/cms/seasons/GYQ4MQ496/episodes?locale=en-US
-            season_id = re.strict_search("seasons/(.*)/episodes?", response.url).group(1)
+            season_id = re.strict_search(r"seasons/(.*)/episodes?", response.url).group(1)
             path = self.season_json_path(season_id)
             raw_json = response.json()
             path.write(json.dumps(raw_json))
 
     def download_all(self, minimum_timestamp: Optional[datetime] = None) -> None:
-        """Download all of the files if they are outdated or do not exist"""
         if outdated_files := self.any_file_is_outdated(minimum_timestamp):
             file_list = "\n".join([str(file) for file in outdated_files])
             logging.getLogger(self.logger_identifier()).info("Found outdated files %s", file_list)
@@ -228,7 +206,6 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
-        """Import the season information, does not attempt to download or update the information"""
         show_seasons_json_parsed = self.show_seasons_json_path.parsed_cached()
 
         for sort_order, season in enumerate(show_seasons_json_parsed["data"]):
@@ -250,7 +227,6 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
-        """Import the episode information, does not attempt to download or update the information"""
         show_seasons_json_parsed = self.show_seasons_json_path.parsed_cached()["data"]
 
         for season in show_seasons_json_parsed:

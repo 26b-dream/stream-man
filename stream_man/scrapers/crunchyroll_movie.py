@@ -9,10 +9,8 @@ from typing import TYPE_CHECKING
 import common.extended_re as re
 from common.abstract_scraper import AbstractScraperClass
 from common.base_scraper import ScraperShowShared
-from common.constants import DOWNLOADED_FILES_DIR
 from django.db import transaction
 from extended_path import ExtendedPath
-from json_file import JSONFile
 from media.models import Episode, Season, Show
 from playwright.sync_api import sync_playwright
 from playwright_stealth import stealth_sync
@@ -20,7 +18,7 @@ from playwright_stealth import stealth_sync
 if TYPE_CHECKING:
     from typing import Optional
 
-    from playwright.sync_api._generated import ElementHandle, Page, Response
+    from playwright.sync_api._generated import Page, Response
 
 
 class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
@@ -28,7 +26,7 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
     DOMAIN = "https://www.crunchyroll.com"
     FAVICON_URL = DOMAIN + "/favicons/favicon-32x32.png"
 
-    # Example show URLs
+    # Example movie URL
     #   https://www.crunchyroll.com/watch/G25FVD45Q/009-1-the-end-of-the-beginning
     SHOW_URL_REGEX = re.compile(r"^(?:https:\/\/w?w?w?.?crunchyroll\.com)?\/watch\/*(?P<show_id>.*?)(?:\/|$)")
 
@@ -37,25 +35,11 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
         self.movie_url = f"{self.DOMAIN}/series/{self.show_id}"
 
     def any_file_is_outdated(self, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
-        """Check if any of the downloaded files are missing or outdated
-
-        Args:
-            minimum_timestamp (Optional[datetime], optional): The minimum timestamp the files must have. Defaults to
-            None.
-
-        Returns:
-            list[ExtendedPath]: List of outdated files, empty if all files are up to date"""
+        """Check if any of the downloaded files are missing or outdated"""
         return self.any_movie_file_outdated(minimum_timestamp)
 
     def any_movie_file_outdated(self, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
-        """Check if any of the downloaded movie files are missing or outdated
-
-        Args:
-            minimum_timestamp (Optional[datetime], optional): The minimum timestamp the files must have. Defaults to
-            None.
-
-        Returns:
-            list[ExtendedPath]: List of outdated movie files, empty if all files are up to date"""
+        """Check if any of the downloaded movie files are missing or outdated"""
 
         outdated_files: list[ExtendedPath] = []
         if self.show_json_path.outdated(minimum_timestamp):
@@ -66,26 +50,23 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
         return outdated_files
 
     def save_playwright_files(self, response: Response) -> None:
+        """Function that is called on all of the reesponses that the playwright browser gets"""
         # The IDs don't match up, and there is no good way to go from the ID in the URL to the ID returned in the JSON
         # URL, just rename the files to match the ID in the URL
-        # TODO: THis regex is recompiled every time move it to a class variable or something
-        show_info_regex = re.compile(r"movie_listings/(?P<show_id>.*?)\?locale")
-        season_info_regex = re.compile(r"movie_listings/(?P<show_id>.*?)\/movies\?")
 
         # Example URL: https://www.crunchyroll.com/content/v2/cms/movie_listings/GY8VX2G9Y?locale=en-US
-        if show_info_regex.search(response.url):
+        if re.compile(r"movie_listings/(?P<show_id>.*?)\?locale").search(response.url):
             raw_json = response.json()
             path = self.show_json_path
             path.write(json.dumps(raw_json))
 
         # Example URL: https://www.crunchyroll.com/content/v2/cms/movie_listings/GY8VX2G9Y/movies?locale=en-US
-        elif season_info_regex.search(response.url):
+        elif re.compile(r"movie_listings/(?P<show_id>.*?)\/movies\?").search(response.url):
             raw_json = response.json()
             path = self.season_json_path(self.show_id)
             path.write(json.dumps(raw_json))
 
     def download_all(self, minimum_timestamp: Optional[datetime] = None) -> None:
-        """Download all of the files if they are outdated or do not exist"""
         if outdated_files := self.any_file_is_outdated(minimum_timestamp):
             file_list = "\n".join([str(file) for file in outdated_files])
             logging.getLogger(self.logger_identifier()).info("Found outdated files %s", file_list)
@@ -164,7 +145,6 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
-        """Import the season information, does not attempt to download or update the information"""
         season = self.show_json_path.parsed_cached()["data"][0]
         # season_id is the value that is returned on JSON which is not present on the website in any user facing way
         season_info = Season().get_or_new(season_id=season["id"], show=self.show_info)[0]
@@ -180,7 +160,6 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
-        """Import the episode information, does not attempt to download or update the information"""
         season = self.season_json_path(self.show_id).parsed_cached()["data"][0]
         # season_id is the value that is returned on JSON which is not present on the website in any user facing way
         season_info = Season().get_or_new(season_id=season["listing_id"], show=self.show_info)[0]

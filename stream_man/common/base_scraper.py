@@ -115,7 +115,22 @@ class ScraperShowShared(ABC, ScraperShared):
         self.import_all(minimum_info_timestamp, minimum_modified_timestamp)
 
     @abstractmethod
+    def download_all(
+        self,
+        minimum_timestamp: Optional[datetime] = None,
+    ) -> None:
+        """Downloads all of the information for a show"""
+
+    @abstractmethod
     def import_all(
+        self,
+        minimum_info_timestamp: Optional[datetime] = None,
+        minimum_modified_timestamp: Optional[datetime] = None,
+    ) -> None:
+        """Imports all of the information without downloading any of the files"""
+
+    @abstractmethod
+    def import_show(
         self,
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
@@ -123,11 +138,20 @@ class ScraperShowShared(ABC, ScraperShared):
         """Imports all of the information for a show without downloading any of the files"""
 
     @abstractmethod
-    def download_all(
+    def import_season(
         self,
-        minimum_timestamp: Optional[datetime] = None,
+        minimum_info_timestamp: Optional[datetime] = None,
+        minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
-        """Downloads all of the information for a show"""
+        """Imports all of the information for a season without downloading any of the files"""
+
+    @abstractmethod
+    def import_episode(
+        self,
+        minimum_info_timestamp: Optional[datetime] = None,
+        minimum_modified_timestamp: Optional[datetime] = None,
+    ) -> None:
+        """Imports all of the information for an episode without downloading any of the files"""
 
     @lru_cache(maxsize=1024)  # Value will never change
     def season_json_path(self, season_id: str) -> JSONFile:
