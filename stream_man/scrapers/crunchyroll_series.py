@@ -201,7 +201,6 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
-        """Import the show information, does not attempt to download or update the information"""
         if self.show_info.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
             parsed_show = self.show_json_path.parsed_cached()["data"][0]
 
@@ -219,6 +218,9 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
             self.show_info.image_url = parsed_show["images"]["poster_wide"][0][-1]["source"]
             self.show_info.favicon_url = self.FAVICON_URL
             self.show_info.deleted = False
+            # I don't see anything on Cruncyhroll that shows the difference between a TV Series, ONA, or OVA, so just list
+            # this as a series which is a generic catch all term
+            self.show_info.media_type = "Series"
             self.show_info.add_timestamps_and_save(self.show_json_path)
 
     def import_seasons(
@@ -237,7 +239,6 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
             season_info = Season().get_or_new(season_id=season["id"], show=self.show_info)[0]
 
             if season_info.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
-                season_info.sort_order = sort_order
                 season_info.number = parsed_episode["season_number"]
                 season_info.name = parsed_episode["season_title"]
                 season_info.sort_order = sort_order
