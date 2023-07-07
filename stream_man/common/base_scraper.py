@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from time import sleep
-from typing import TYPE_CHECKING
 import logging
 from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
+from functools import lru_cache
+from time import sleep
+from typing import TYPE_CHECKING
 
 import common.extended_re as re
 from common.constants import DOWNLOADED_FILES_DIR
 from extended_path import ExtendedPath
-from media.models import Show
-from functools import lru_cache
 from html_file import HTMLFile
 from json_file import JSONFile
+from media.models import Episode, Show
 
 if TYPE_CHECKING:
     from re import Pattern
@@ -128,3 +128,20 @@ class ScraperShowShared(ABC, ScraperShared):
         minimum_timestamp: Optional[datetime] = None,
     ) -> None:
         """Downloads all of the information for a show"""
+
+    @lru_cache(maxsize=1024)  # Value will never change
+    def season_json_path(self, season_id: str) -> JSONFile:
+        """Path for the JSON file that lists all of the episodes for a specific season"""
+        return JSONFile(DOWNLOADED_FILES_DIR, self.WEBSITE, "season", self.show_id, f"{season_id}.json")
+
+    def update_update_at(self) -> None:
+        # Get last 5 aired episodes
+        latest_episode = Episode.objects.filter(season__show=self.show_info).order_by("-release_date").first()
+
+        if latest_episode:
+            # If the episode aired within a month of the last download update the information weekly
+            if latest_episode.release_date > self.show_info.info_timestamp - timedelta(days=365 / 12):
+                self.show_info.update_at = latest_episode.release_date + timedelta(days=7)
+            # Any other situation update the information monthly
+            else:
+                self.show_info.update_at = self.show_info.info_timestamp + timedelta(days=365 / 12)
