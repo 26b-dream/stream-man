@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from playwright.sync_api._generated import ElementHandle, Page, Response
 
 
-class CrunchyRollSeries(ScraperShowShared, AbstractScraperClass):
+class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
     WEBSITE = "Crunchyroll"
     DOMAIN = "https://www.crunchyroll.com"
     FAVICON_URL = DOMAIN + "/favicons/favicon-32x32.png"
