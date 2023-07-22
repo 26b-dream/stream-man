@@ -17,16 +17,8 @@ def strict_search(pattern: Pattern[str] | str, string: str) -> Match[str]:
     """Scan through string looking for a match to the pattern, returning a Match object, or raise StrictPatternFailure
     if no match was found.
 
-    Args:
-        pattern (Pattern[str] | str): The pattern to search for
-        string (str): The string to search in
-
     Raises:
-        StrictPatternFailure: If no match is found
-
-    Returns:
-        Match[str]: The match object
-    """
+        StrictPatternFailure: If no match is found"""
     output = search(pattern, string)
     if output is None:
         raise StrictPatternFailure(f"{string} did not include {pattern}")
