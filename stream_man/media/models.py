@@ -1,8 +1,9 @@
 """Models for the media app"""
 from __future__ import annotations
 
+import json
 from datetime import date
-from typing import Optional
+from typing import Any, Optional
 
 from django.db import models
 from django_model_helpers import GetOrNew, ModelWithIdAndTimestamp, auto_unique
@@ -10,6 +11,8 @@ from django_model_helpers import GetOrNew, ModelWithIdAndTimestamp, auto_unique
 
 class Show(ModelWithIdAndTimestamp, GetOrNew):
     """Model that stores information for a show"""
+
+    season_set: models.QuerySet[Season]
 
     class Meta:  # pyright: ignore [reportIncompatibleVariableOverride]
         ordering = ["name"]
@@ -51,9 +54,25 @@ class Show(ModelWithIdAndTimestamp, GetOrNew):
         else:
             return date.fromtimestamp(0)
 
+    def dump(self) -> dict[str, Any]:
+        """Dump all of the information for a show as json"""
+        variables = vars(self).copy()
+        # State is just junk information when it comes to serialization
+        variables.pop("_state")
+        # Convert all of the datetimes to ISO format so they are able to be serialized
+        variables["info_timestamp"] = self.info_timestamp.isoformat()
+        variables["info_modified_timestamp"] = self.info_modified_timestamp.isoformat()
+        variables["update_at"] = self.update_at.isoformat() if self.update_at else None
+
+        variables["seasons"] = [season.dump() for season in self.season_set.all()]
+
+        return variables
+
 
 class Season(ModelWithIdAndTimestamp, GetOrNew):
     """Model that stores information for a season of a show"""
+
+    episode_set: models.QuerySet[Episode]
 
     class Meta:  # pyright: ignore [reportIncompatibleVariableOverride]
         constraints = [auto_unique("show", "season_id")]
@@ -76,6 +95,19 @@ class Season(ModelWithIdAndTimestamp, GetOrNew):
 
     def __str__(self) -> str:
         return self.name
+
+    def dump(self) -> dict[str, Any]:
+        """Dump all of the information for a show as json"""
+        variables = vars(self).copy()
+        # State is just junk information when it comes to serialization
+        variables.pop("_state")
+        # Convert all of the datetimes to ISO format so they are able to be serialized
+        variables["info_timestamp"] = self.info_timestamp.isoformat()
+        variables["info_modified_timestamp"] = self.info_modified_timestamp.isoformat()
+
+        variables["episodes"] = [episode.dump() for episode in self.episode_set.all()]
+
+        return variables
 
 
 class Episode(ModelWithIdAndTimestamp, GetOrNew):
@@ -133,6 +165,18 @@ class Episode(ModelWithIdAndTimestamp, GetOrNew):
             sort_order__gt=self.sort_order,
         ).order_by("season__sort_order", "sort_order")
         return episodes.first()
+
+    def dump(self) -> dict[str, Any]:
+        """Dump all of the information for a show as json"""
+        variables = vars(self).copy()
+        # State is just junk information when it comes to serialization
+        variables.pop("_state")
+        # Convert all of the datetimes to ISO format so they are able to be serialized
+        variables["info_timestamp"] = self.info_timestamp.isoformat()
+        variables["info_modified_timestamp"] = self.info_modified_timestamp.isoformat()
+        variables["air_date"] = self.air_date.isoformat()
+        variables["release_date"] = self.release_date.isoformat()
+        return variables
 
 
 class EpisodeWatch(models.Model):
