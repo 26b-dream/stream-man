@@ -39,18 +39,18 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
             DOWNLOADED_FILES_DIR, self.WEBSITE, "show_seasons", f"{self.show_id}.json"
         )
 
-    def any_file_is_outdated(self, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
+    def outdated_files(self, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
         """Check if any of the downloaded files are missing or outdated"""
-        output = self.any_show_file_outdated(minimum_timestamp)
+        output = self.outdated_show_files(minimum_timestamp)
 
         if self.show_seasons_json_path.exists():
             show_seasons_json_parsed = self.show_seasons_json_path.parsed()
             for season in show_seasons_json_parsed["data"]:
-                output += self.any_season_file_is_outdated(season["id"], minimum_timestamp)
+                output += self.outdated_season_files(season["id"], minimum_timestamp)
 
         return output
 
-    def any_show_file_outdated(self, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
+    def outdated_show_files(self, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
         """Check if any of the downloaded show files are missing or outdated"""
 
         outdated_files: list[ExtendedPath] = []
@@ -61,9 +61,7 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
 
         return outdated_files
 
-    def any_season_file_is_outdated(
-        self, season_id: str, minimum_timestamp: Optional[datetime] = None
-    ) -> list[ExtendedPath]:
+    def outdated_season_files(self, season_id: str, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
         """Check if any of the downloaded season files are missing or outdated"""
 
         season_json_path = self.season_json_path(season_id)
@@ -91,7 +89,7 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
             path.write(json.dumps(raw_json))
 
     def download_all(self, minimum_timestamp: Optional[datetime] = None) -> None:
-        if outdated_files := self.any_file_is_outdated(minimum_timestamp):
+        if outdated_files := self.outdated_files(minimum_timestamp):
             file_list = "\n".join([str(file) for file in outdated_files])
             logging.getLogger(self.logger_identifier()).info("Found outdated files %s", file_list)
 
@@ -107,7 +105,7 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
 
     def download_show(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
         """Download all of the show files if they are outdated or do not exist"""
-        if outdated_files := self.any_show_file_outdated(minimum_timestamp):
+        if outdated_files := self.outdated_show_files(minimum_timestamp):
             # Join all outdated files into line seperateed string
             file_list = "\n".join([str(file) for file in outdated_files])
             logging.getLogger(self.logger_identifier()).info("Found outdated show files %s", file_list)
@@ -122,7 +120,7 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
         show_seasons_json_parsed = self.show_seasons_json_path.parsed()
         for season in show_seasons_json_parsed["data"]:
             # If all of the season files are up to date nothing needs to be done
-            if self.any_season_file_is_outdated(season["id"], minimum_timestamp):
+            if self.outdated_season_files(season["id"], minimum_timestamp):
                 logging.getLogger(self.logger_identifier()).info("Scraping Season: %s", season["title"])
                 # All season pages have to be downloaded from the show page so open the show page
                 # Only do this one time, all later pages can reuse existing page
@@ -173,12 +171,13 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
             # TODO: poster_long may be a better option depending on how the website lays out the information
             # TODO: Higher resolutions may be preferable depending on website layout
             self.show_info.thumbnail_url = parsed_show["images"]["poster_wide"][0][0]["source"]
+
             self.show_info.image_url = parsed_show["images"]["poster_wide"][0][-1]["source"]
             self.show_info.favicon_url = self.FAVICON_URL
-            self.show_info.deleted = False
             # I don't see anything on Cruncyhroll that shows the difference between a TV Series, ONA, or OVA, so just list
             # this as a series which is a generic catch all term
             self.show_info.media_type = "Series"
+            self.show_info.deleted = False
             self.show_info.add_timestamps_and_save(self.show_json_path)
 
     def import_seasons(
@@ -224,10 +223,12 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
                     episode_info.duration = episode["duration_ms"] / 1000
                     episode_info.url = f"{self.DOMAIN}/watch/{episode['id']}"
 
-                    episode_info.air_date = datetime.strptime(episode["episode_air_date"], "%Y-%m-%dT%H:%M:%S%z")
+                    episode_info.air_date = datetime.strptime(
+                        episode["episode_air_date"], "%Y-%m-%dT%H:%M:%S%z"
+                    ).astimezone()
                     episode_info.release_date = datetime.strptime(
                         episode["premium_available_date"], "%Y-%m-%dT%H:%M:%S%z"
-                    )
+                    ).astimezone()
                     # Every now and then a show just won't have thumbnails
                     # See: https://beta.crunchyroll.com/series/G79H23VD4/im-kodama-kawashiri (May be updated later)
                     if episode_images := episode.get("images"):
