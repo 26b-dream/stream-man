@@ -9,9 +9,8 @@ from typing import TYPE_CHECKING
 import common.extended_re as re
 from common.abstract_scraper import AbstractScraperClass
 from common.base_scraper import ScraperShowShared
-from django.db import transaction
 from extended_path import ExtendedPath
-from media.models import Episode, Season, Show
+from media.models import Episode, Season
 from playwright.sync_api import sync_playwright
 from playwright_stealth import stealth_sync
 
@@ -93,27 +92,6 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
             self.playwright_wait_for_files(
                 page, minimum_timestamp, self.show_json_path, self.season_json_path(self.show_id)
             )
-
-    @transaction.atomic
-    def import_all(
-        self,
-        minimum_info_timestamp: Optional[datetime] = None,
-        minimum_modified_timestamp: Optional[datetime] = None,
-    ) -> None:
-        logging.getLogger(self.logger_identifier()).info("Importing information")
-
-        # Mark everything as deleted and let importing mark it as not deleted because this is the easiest way to
-        # determine when an entry is deleted
-        Show.objects.filter(id=self.show_info.id, website=self.WEBSITE).update(deleted=True)
-        Season.objects.filter(show=self.show_info).update(deleted=True)
-        Episode.objects.filter(season__show=self.show_info).update(deleted=True)
-
-        self.import_show(minimum_info_timestamp, minimum_modified_timestamp)
-        self.import_seasons(minimum_info_timestamp, minimum_modified_timestamp)
-        self.import_episodes(minimum_info_timestamp, minimum_modified_timestamp)
-
-        # Even though episodes won't be added, movies can still be deleted so still check it using the normal method
-        self.update_update_at()
 
     def import_show(
         self,

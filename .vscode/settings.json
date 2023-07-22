@@ -4,4 +4,9 @@
         "--load-plugins=pylint_django",
         "--django-settings-module=stream_man",
     ],
+    "python.testing.pytestArgs": [
+        "stream_man/tests/"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
 }

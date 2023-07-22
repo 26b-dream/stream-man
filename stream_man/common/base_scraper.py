@@ -11,10 +11,11 @@ from typing import TYPE_CHECKING
 
 import common.extended_re as re
 from common.constants import DOWNLOADED_FILES_DIR
+from django.db import transaction
 from extended_path import ExtendedPath
 from html_file import HTMLFile
 from json_file import JSONFile
-from media.models import Episode, Show
+from media.models import Episode, Season, Show
 
 if TYPE_CHECKING:
     from re import Pattern
@@ -121,13 +122,26 @@ class ScraperShowShared(ABC, ScraperShared):
     ) -> None:
         """Downloads all of the information for a show"""
 
-    @abstractmethod
+    @transaction.atomic
     def import_all(
         self,
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
-        """Imports all of the information without downloading any of the files"""
+        logging.getLogger(self.logger_identifier()).info("Importing information")
+
+        # Mark everything as deleted and let importing mark it as not deleted because this is the easiest way to
+        # determine when an entry is deleted
+        Show.objects.filter(id=self.show_info.id, website=self.WEBSITE).update(deleted=True)
+        Season.objects.filter(show=self.show_info).update(deleted=True)
+        Episode.objects.filter(season__show=self.show_info).update(deleted=True)
+
+        self.import_show(minimum_info_timestamp, minimum_modified_timestamp)
+        self.import_seasons(minimum_info_timestamp, minimum_modified_timestamp)
+        self.import_episodes(minimum_info_timestamp, minimum_modified_timestamp)
+
+        # Even though episodes won't be added, movies can still be deleted so still check it using the normal method
+        self.update_update_at()
 
     @abstractmethod
     def import_show(
@@ -138,7 +152,7 @@ class ScraperShowShared(ABC, ScraperShared):
         """Imports all of the information for a show without downloading any of the files"""
 
     @abstractmethod
-    def import_season(
+    def import_seasons(
         self,
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
@@ -146,7 +160,7 @@ class ScraperShowShared(ABC, ScraperShared):
         """Imports all of the information for a season without downloading any of the files"""
 
     @abstractmethod
-    def import_episode(
+    def import_episodes(
         self,
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
