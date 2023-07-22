@@ -33,11 +33,11 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
         super().__init__(show_url)
         self.movie_url = f"{self.DOMAIN}/series/{self.show_id}"
 
-    def any_file_is_outdated(self, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
+    def outdated_files(self, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
         """Check if any of the downloaded files are missing or outdated"""
-        return self.any_movie_file_outdated(minimum_timestamp)
+        return self.outdated_movie_files(minimum_timestamp)
 
-    def any_movie_file_outdated(self, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
+    def outdated_movie_files(self, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
         """Check if any of the downloaded movie files are missing or outdated"""
 
         outdated_files: list[ExtendedPath] = []
@@ -66,7 +66,7 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
             path.write(json.dumps(raw_json))
 
     def download_all(self, minimum_timestamp: Optional[datetime] = None) -> None:
-        if outdated_files := self.any_file_is_outdated(minimum_timestamp):
+        if outdated_files := self.outdated_files(minimum_timestamp):
             file_list = "\n".join([str(file) for file in outdated_files])
             logging.getLogger(self.logger_identifier()).info("Found outdated files %s", file_list)
 
@@ -81,7 +81,7 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
 
     def download_movie(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
         """Download all of the show files if they are outdated or do not exist"""
-        if outdated_files := self.any_movie_file_outdated(minimum_timestamp):
+        if outdated_files := self.outdated_movie_files(minimum_timestamp):
             # Join all outdated files into line seperateed string
             file_list = "\n".join([str(file) for file in outdated_files])
             logging.getLogger(self.logger_identifier()).info("Found outdated movie files %s", file_list)
