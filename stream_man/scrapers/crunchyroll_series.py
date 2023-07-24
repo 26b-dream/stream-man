@@ -39,33 +39,102 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
             DOWNLOADED_FILES_DIR, self.WEBSITE, "show_seasons", f"{self.show_id}.json"
         )
 
-    def outdated_files(self, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
-        """Check if any of the downloaded files are missing or outdated"""
-        output = self.outdated_show_files(minimum_timestamp)
+    def outdated_files(self, minimum_timestamp: Optional[datetime] = None, log: Optional[bool] = False) -> bool:
+        """Check if any of the files are outdated"""
+        return self.outdated_show_files(minimum_timestamp, log) or self.outdated_seasons_files(minimum_timestamp, log)
 
-        if self.show_seasons_json_path.exists():
-            show_seasons_json_parsed = self.show_seasons_json_path.parsed()
-            for season in show_seasons_json_parsed["data"]:
-                output += self.outdated_season_files(season["id"], minimum_timestamp)
+    def outdated_show_files(self, minimum_timestamp: Optional[datetime] = None, log: Optional[bool] = False) -> bool:
+        """Check if any of the files for the show are outdated"""
+        outdated_files = False
+        for file_path in [self.show_json_path, self.show_seasons_json_path]:
+            if file_path.outdated(minimum_timestamp):
+                outdated_files = True
+            logging.getLogger(f"{self.logger_identifier()}.Outdated show file").info(self.short_file_path(file_path))
+        return outdated_files
+
+    def outdated_seasons_files(self, minimum_timestamp: Optional[datetime] = None, log: Optional[bool] = False) -> bool:
+        """Check if any of the files for any of the seasons are outdated"""
+        output = False
+        # If unable to determine if files are outdated return false
+        if not self.show_seasons_json_path.exists():
+            return output
+
+        show_seasons_json_parsed = self.show_seasons_json_path.parsed()
+        for season in show_seasons_json_parsed["data"]:
+            if self.outdated_season_files(season["id"], minimum_timestamp, log):
+                output = True
 
         return output
 
-    def outdated_show_files(self, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
-        """Check if any of the downloaded show files are missing or outdated"""
-
-        outdated_files: list[ExtendedPath] = []
-        if self.show_json_path.outdated(minimum_timestamp):
-            outdated_files.append(self.show_json_path)
-        if self.show_seasons_json_path.outdated(minimum_timestamp):
-            outdated_files.append(self.show_seasons_json_path)
+    def outdated_season_files(
+        self, season_id: str, minimum_timestamp: Optional[datetime] = None, log: Optional[bool] = False
+    ) -> bool:
+        """Check if any of the files for a specific season are outdated, it is useful to have this as a seperate
+        function because it makes it easier to only download the seasons that have outdated files"""
+        outdated_files = False
+        file_path = self.season_json_path(season_id)
+        if file_path.outdated(minimum_timestamp):
+            logging.getLogger(f"{self.logger_identifier()}.Outdated season file").info(self.short_file_path(file_path))
+            outdated_files = True
 
         return outdated_files
 
-    def outdated_season_files(self, season_id: str, minimum_timestamp: Optional[datetime] = None) -> list[ExtendedPath]:
-        """Check if any of the downloaded season files are missing or outdated"""
+    def short_file_path(self, file_path: ExtendedPath) -> str:
+        """Returns the file path relative to the downloaded files directory"""
+        return str(file_path.relative_to(DOWNLOADED_FILES_DIR))
 
-        season_json_path = self.season_json_path(season_id)
-        return [season_json_path] if season_json_path.outdated(minimum_timestamp) else []
+    def download_all(self, minimum_timestamp: Optional[datetime] = None) -> None:
+        if self.outdated_files(minimum_timestamp):
+            logging.getLogger(self.logger_identifier()).info("Initializing Playwright")
+            with sync_playwright() as playwright:
+                # Create a new page that will autoamtically save JSON files when they are requested
+                page = self.playwright_browser(playwright).new_page()
+                stealth_sync(page)
+                page.on("response", self.save_playwright_files)
+
+                self.download_show(page, minimum_timestamp)
+                self.download_seasons(page, minimum_timestamp)
+                page.close()
+
+    def download_show(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
+        """Download all of the show files if they are outdated or do not exist"""
+        if self.outdated_show_files(minimum_timestamp, log=True):
+            logging.getLogger(f"{self.logger_identifier()}.Downloading").info(self.show_url)
+
+            page.goto(self.show_url, wait_until="networkidle")
+
+            self.playwright_wait_for_files(
+                page, 10, minimum_timestamp, self.show_json_path, self.show_seasons_json_path
+            )
+
+    def download_seasons(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
+        """Download all of the season files if they are outdated or do not exist"""
+        show_seasons_json_parsed = self.show_seasons_json_path.parsed()
+        for season in show_seasons_json_parsed["data"]:
+            # If all of the season files are up to date nothing needs to be done
+            if self.outdated_season_files(season["id"], minimum_timestamp, log=True):
+                logging.getLogger(f"{self.logger_identifier()}.Downloading").info(season["title"])
+                # All season pages have to be downloaded from the show page so open the show page
+                # Only do this one time, all later pages can reuse existing page
+                if self.show_url not in page.url:
+                    page.goto(self.show_url, wait_until="networkidle")
+
+                # Season selector only exists for shows with multiple seasons
+                if page.query_selector("div[class='season-info']"):
+                    # Open season selector
+                    page.locator("div[class='season-info']").click()
+
+                    # Sleep for 5 seconds to avoid being banned
+                    page.wait_for_timeout(5000)
+
+                    # Click season
+                    self.season_button(page, season).click()
+
+                # Wait for files to exist
+                episodes_json_path = self.season_json_path(season["id"])
+                self.playwright_wait_for_files(page, 10, minimum_timestamp, episodes_json_path)
+
+        raise ValueError(f"Could not find season: {season_string}")
 
     def save_playwright_files(self, response: Response) -> None:
         """Function that is called on all of the reesponses that the playwright browser gets"""
@@ -88,60 +157,6 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
             raw_json = response.json()
             path.write(json.dumps(raw_json))
 
-    def download_all(self, minimum_timestamp: Optional[datetime] = None) -> None:
-        if outdated_files := self.outdated_files(minimum_timestamp):
-            file_list = "\n".join([str(file) for file in outdated_files])
-            logging.getLogger(self.logger_identifier()).info("Found outdated files %s", file_list)
-
-            with sync_playwright() as playwright:
-                # Create a new page that will autoamtically save JSON files when they are requested
-                page = self.playwright_browser(playwright).new_page()
-                stealth_sync(page)
-                page.on("response", self.save_playwright_files)
-
-                self.download_show(page, minimum_timestamp)
-                self.download_seasons(page, minimum_timestamp)
-                page.close()
-
-    def download_show(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
-        """Download all of the show files if they are outdated or do not exist"""
-        if outdated_files := self.outdated_show_files(minimum_timestamp):
-            # Join all outdated files into line seperateed string
-            file_list = "\n".join([str(file) for file in outdated_files])
-            logging.getLogger(self.logger_identifier()).info("Found outdated show files %s", file_list)
-            logging.getLogger(self.logger_identifier()).info("Scraping %s", self.show_url)
-
-            page.goto(self.show_url, wait_until="networkidle")
-
-            self.playwright_wait_for_files(page, minimum_timestamp, self.show_json_path, self.show_seasons_json_path)
-
-    def download_seasons(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
-        """Download all of the season files if they are outdated or do not exist"""
-        show_seasons_json_parsed = self.show_seasons_json_path.parsed()
-        for season in show_seasons_json_parsed["data"]:
-            # If all of the season files are up to date nothing needs to be done
-            if self.outdated_season_files(season["id"], minimum_timestamp):
-                logging.getLogger(self.logger_identifier()).info("Scraping Season: %s", season["title"])
-                # All season pages have to be downloaded from the show page so open the show page
-                # Only do this one time, all later pages can reuse existing page
-                if self.show_url not in page.url:
-                    page.goto(self.show_url, wait_until="networkidle")
-
-                # Season selector only exists for shows with multiple seasons
-                if page.query_selector("div[class='season-info']"):
-                    # Open season selector
-                    page.locator("div[class='season-info']").click()
-
-                    # Sleep for 5 seconds to avoid being banned
-                    page.wait_for_timeout(5000)
-
-                    # Click season
-                    self.season_button(page, season).click()
-
-                # Wait for files to exist
-                episodes_json_path = self.season_json_path(season["id"])
-                self.playwright_wait_for_files(page, minimum_timestamp, episodes_json_path)
-
     def season_button(self, page: Page, season: dict[str, str]) -> ElementHandle:
         """Finds the button that will go to the season page"""
         season_string = f"S{season['season_number']}: {season['title']}"
@@ -150,13 +165,12 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
             if season_string in maybe_season.inner_text():
                 return maybe_season
 
-        raise ValueError(f"Could not find season: {season_string}")
-
     def import_show(
         self,
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
+        """Import the show information"""
         if self.show_info.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
             parsed_show = self.show_json_path.parsed_cached()["data"][0]
 
@@ -167,11 +181,7 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
             # [0] is the first poster_wide design (as far as I can tell there is always just one)
             # [0][0] the first image listed is the lowest resolution
             # [0][1] the last image listed is the highest resolution
-            # TODO: Get the favicon dynamically from the website
-            # TODO: poster_long may be a better option depending on how the website lays out the information
-            # TODO: Higher resolutions may be preferable depending on website layout
             self.show_info.thumbnail_url = parsed_show["images"]["poster_wide"][0][0]["source"]
-
             self.show_info.image_url = parsed_show["images"]["poster_wide"][0][-1]["source"]
             self.show_info.favicon_url = self.FAVICON_URL
             # I don't see anything on Cruncyhroll that shows the difference between a TV Series, ONA, or OVA, so just list
@@ -185,6 +195,7 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
+        """Import the season information"""
         show_seasons_json_parsed = self.show_seasons_json_path.parsed_cached()
 
         for sort_order, season in enumerate(show_seasons_json_parsed["data"]):
@@ -206,6 +217,7 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
+        """Import the episode information"""
         show_seasons_json_parsed = self.show_seasons_json_path.parsed_cached()["data"]
 
         for season in show_seasons_json_parsed:
@@ -229,15 +241,14 @@ class CrunchyrollSeries(ScraperShowShared, AbstractScraperClass):
                     episode_info.release_date = datetime.strptime(
                         episode["premium_available_date"], "%Y-%m-%dT%H:%M:%S%z"
                     ).astimezone()
-                    # Every now and then a show just won't have thumbnails
-                    # See: https://beta.crunchyroll.com/series/G79H23VD4/im-kodama-kawashiri (May be updated later)
+                    # Every now and then a show just won't have thumbnails and the thumbnail will be added a few weeks
+                    # later, example: https://beta.crunchyroll.com/series/G79H23VD4/im-kodama-kawashiri
                     if episode_images := episode.get("images"):
                         # [0] is the first thumbnail design (as far as I can tell there is always just one)
                         # [0][0] the first image listed is the lowest resolution
-                        # [0][1] the last image listed is the highest resolution
+                        # [0][-1] the last image listed is the highest resolution
                         # TODO: Higher resolutions may be preferable depending on website layout
                         episode_info.thumbnail_url = episode_images["thumbnail"][0][0]["source"]
                         episode_info.image_url = episode_images["thumbnail"][0][-1]["source"]
-                    # No seperate file for episodes so just use the season file
                     episode_info.deleted = False
                     episode_info.add_timestamps_and_save(season_info.info_timestamp)

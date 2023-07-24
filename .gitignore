@@ -2,6 +2,7 @@
 credentials.encrypted
 credentials.json
 downloaded_files
+images
 
 # Poetry specific
 poetry.lock
