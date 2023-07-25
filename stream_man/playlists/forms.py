@@ -55,6 +55,7 @@ class AddShowForm(forms.Form):
 
 class VisualConfigForm(forms.Form):
     columns = forms.IntegerField()
+    image_width = forms.IntegerField()
 
 
 class EditPlaylistForm(forms.ModelForm):
@@ -104,6 +105,8 @@ class PlaylistSortForm(forms.Form):
         to_field_name="website",
         required=False,  # Not required because a blank value is used to indicate all websites
     )
+
+    deleted = forms.BooleanField(required=False)
 
     # Method to dynamically set the queryset
     # See: https://stackoverflow.com/questions/4880842/

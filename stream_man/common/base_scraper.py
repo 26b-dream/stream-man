@@ -46,17 +46,27 @@ class ScraperShared:
             user_agent=user_agent,
         )
 
-    def playwright_wait_for_files(self, page: Page, timestamp: Optional[datetime], *files: ExtendedPath) -> None:
+    def playwright_wait_for_files(
+        self, page: Page, seconds: int, timestamp: Optional[datetime], *files: ExtendedPath
+    ) -> None:
         """Downloads will sometimes randomly not be detected by playwright if nothing is being executed. This function
         will simply execute a query selector until the file exists and is up to date. This is also useful to detect
         changes in the website causing files to no longer download or be detected"""
-        for file in files:
-            # Wait until file exists and is up to date
-            while not file.exists() or (timestamp and file.stat().st_mtime < timestamp.timestamp()):
-                # Executing a query_selector will keep the download form randomly hanging while waiting for the file to
-                # be downloaded
-                page.query_selector("html")
-                sleep(1)
+
+        for _ in range(seconds):
+            if all(
+                file.exists() and (not timestamp or file.stat().st_mtime >= timestamp.timestamp()) for file in files
+            ):
+                return
+
+            # Executing a query_selector will keep the download form randomly hanging while waiting for the file to
+            # be downloaded
+            page.query_selector("html")
+            sleep(1)
+
+        missing_files = [str(file) for file in files if not file.exists()]
+
+        raise FileNotFoundError(f"Files {', '.join(missing_files)} were not found")
 
 
 class ScraperUpdateShared(ScraperShared):
@@ -66,19 +76,18 @@ class ScraperUpdateShared(ScraperShared):
 class ScraperShowShared(ABC, ScraperShared):
     """Shared code for scraping show information"""
 
-    SHOW_URL_REGEX: Pattern[str]
+    URL_REGEX: Pattern[str]
     WEBSITE: str
 
     @classmethod
     def is_valid_show_url(cls, show_url: str) -> bool:
         """Check if a URL is a valid show URL for a specific scraper"""
-        return bool(re.search(cls.SHOW_URL_REGEX, show_url))
+        return bool(re.search(cls.URL_REGEX, show_url))
 
     def __init__(self, show_url: str) -> None:
-        self.show_id = str(re.strict_search(self.SHOW_URL_REGEX, show_url).group("show_id"))
+        self.show_id = str(re.strict_search(self.URL_REGEX, show_url).group("show_id"))
         self.show_info = Show().get_or_new(show_id=self.show_id, website=self.WEBSITE)[0]
         self.show_json_path = JSONFile(DOWNLOADED_FILES_DIR, self.WEBSITE, "show", f"{self.show_id}.json")
-        self.show_html_path = HTMLFile(DOWNLOADED_FILES_DIR, self.WEBSITE, "show", f"{self.show_id}.html")
 
     @classmethod
     def website_name(cls) -> str:
@@ -97,7 +106,6 @@ class ScraperShowShared(ABC, ScraperShared):
         self, minimum_info_timestamp: Optional[datetime] = None, minimum_modified_timestamp: Optional[datetime] = None
     ) -> None:
         """Downloads and imports all of the information"""
-        logging.getLogger(self.logger_identifier()).info("Updating %s", self.show_info)
         self.download_all(minimum_info_timestamp)
         self.import_all(minimum_info_timestamp, minimum_modified_timestamp)
 

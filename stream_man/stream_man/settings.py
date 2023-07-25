@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "media",
     "playlists",
+    "sorl.thumbnail",
 ]
 
 MIDDLEWARE = [
@@ -138,3 +139,6 @@ MESSAGE_TAGS = {
     messages.WARNING: "bg-warning text-dark",
     messages.ERROR: "bg-danger text-white",
 }
+
+MEDIA_ROOT = BASE_DIR / "images"
+MEDIA_URL = "images/"

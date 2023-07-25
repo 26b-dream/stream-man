@@ -5,6 +5,7 @@ import json
 from datetime import date
 from typing import Any, Optional
 
+from common.constants import BASE_DIR
 from django.db import models
 from django_model_helpers import GetOrNew, ModelWithIdAndTimestamp, auto_unique
 
@@ -27,8 +28,7 @@ class Show(ModelWithIdAndTimestamp, GetOrNew):
     #   Crunchyroll mixese movies and TV shows together
     media_type = models.CharField(max_length=256, blank=True)
     description = models.TextField()
-    image_url = models.CharField(max_length=256)
-    thumbnail_url = models.CharField(max_length=255)
+    image = models.ImageField(upload_to="images", null=True, blank=True)
     url = models.CharField(max_length=255)
     favicon_url = models.CharField(max_length=255)
     # Null is allowed because you often need to import the Show before the episodes, but update_at is calculated based
@@ -59,6 +59,8 @@ class Show(ModelWithIdAndTimestamp, GetOrNew):
         variables = vars(self).copy()
         # State is just junk information when it comes to serialization
         variables.pop("_state")
+        # Cast images to strings so they can be serialized
+        variables["image"] = str(variables["image"])
         # Convert all of the datetimes to ISO format so they are able to be serialized
         variables["info_timestamp"] = self.info_timestamp.isoformat()
         variables["info_modified_timestamp"] = self.info_modified_timestamp.isoformat()
@@ -88,8 +90,7 @@ class Season(ModelWithIdAndTimestamp, GetOrNew):
     sort_order = models.PositiveSmallIntegerField()
     number = models.PositiveSmallIntegerField()
     """The order that seasons are sorted on the original website"""
-    image_url = models.CharField(max_length=255)
-    thumbnail_url = models.CharField(max_length=255)
+    image = models.ImageField(upload_to="images", null=True, blank=True)
     url = models.CharField(max_length=255)
     deleted = models.BooleanField()
 
@@ -101,6 +102,8 @@ class Season(ModelWithIdAndTimestamp, GetOrNew):
         variables = vars(self).copy()
         # State is just junk information when it comes to serialization
         variables.pop("_state")
+        # Cast images to strings so they can be serialized
+        variables["image"] = str(variables["image"])
         # Convert all of the datetimes to ISO format so they are able to be serialized
         variables["info_timestamp"] = self.info_timestamp.isoformat()
         variables["info_modified_timestamp"] = self.info_modified_timestamp.isoformat()
@@ -130,8 +133,7 @@ class Episode(ModelWithIdAndTimestamp, GetOrNew):
     characters"""
     sort_order = models.PositiveSmallIntegerField(null=True)
     """The order that episodes are sorted on the website"""
-    image_url = models.CharField(max_length=256)
-    thumbnail_url = models.CharField(max_length=255)
+    image = models.ImageField(upload_to="images", null=True, blank=True)
     description = models.TextField()
     release_date = models.DateTimeField()
     """The date that the episode was made available for streaming, this value is useful for determining when to update a
@@ -171,6 +173,8 @@ class Episode(ModelWithIdAndTimestamp, GetOrNew):
         variables = vars(self).copy()
         # State is just junk information when it comes to serialization
         variables.pop("_state")
+        # Cast images to strings so they can be serialized
+        variables["image"] = str(variables["image"])
         # Convert all of the datetimes to ISO format so they are able to be serialized
         variables["info_timestamp"] = self.info_timestamp.isoformat()
         variables["info_modified_timestamp"] = self.info_modified_timestamp.isoformat()

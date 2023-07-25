@@ -50,14 +50,34 @@ function unclick() {
 }
 
 // Dynamically change the number of cards per row when the value is updated using the configuration form
-function change_cards_per_row(number_of_cards) {
+async function update_card_visuals(number_of_cards, image_width) {
     const cards = document.querySelectorAll("[id^=card]");
-    cards.forEach((card) => {
+    const promises = Array.from(cards).map(async (card) => {
         const cardWidth = 100 / number_of_cards;
         card.style.width = `${cardWidth}%`;
-    });
-}
 
+        // Get the id of the card
+        const card_id = card.id.substring(5);
+
+        // Get the image with the class card-img-top
+        const image = card.querySelector(".card-img-top");
+
+        // Replace the image url with /media/episode_image/card_id/100
+        image.src = `/media/episode_image/${card_id}/${image_width}`;
+
+        return new Promise((resolve, reject) => {
+            image.onload = () => resolve();
+            image.onerror = () => reject(new Error('Image load failed'));
+        });
+    });
+
+    try {
+        await Promise.all(promises);
+        console.log('All images loaded.');
+    } catch (error) {
+        console.log('Some images failed to load.', error);
+    }
+}
 // Get a cookie value by name
 function getCookie(name) {
     const value = `; ${document.cookie}`;

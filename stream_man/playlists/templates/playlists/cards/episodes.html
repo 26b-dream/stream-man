@@ -1,4 +1,5 @@
 {% load playlist_tags %}
+{% load thumbnail %}
 <div class="row">
     {% for episode in episodes %}
         <div class="p-2"
@@ -13,22 +14,29 @@
                                 height:16px">
                     {{ episode.season.show.name }}
                 </div>
-                {% comment %} Regular lazy loading does not work correctly lazy load {% endcomment %}
-                <img src="{{ episode.thumbnail_url }}" class="card-img-top" loading="lazy">
-                <div class="card-body" style="padding-bottom: 0; padding-top: 0;">
-                    <figcaption class="figure-caption">
-                        {% comment %} TODO: Ability to choose what values are shown here {% endcomment %}
-                        <strong>Season:</strong> {{ episode.season.name }}
-                        <br>
-                        <strong>Episode:</strong> {{ episode.number }}. {{ episode.name }}
-                        <br>
-                        <strong>Date:</strong> {{ episode.release_date }}
-                        <br>
-                        <strong>Duration:</strong> {{ episode.duration|seconds_to_time }}
-                        <br>
-                    </figcaption>
-                </div>
+                {% comment %} Need to convert the image width to a string for it to work correctly {% endcomment %}
+                {% thumbnail episode.image image_width|stringformat:"i" upscale=False as im %}
+                <img src="{{ im.url }}"
+                     class="card-img-top"
+                     loading="lazy"
+                     width="auto"
+                     height="100%"
+                     alt="Episode Image">
+            {% endthumbnail %}
+            <div class="card-body" style="padding-bottom: 0; padding-top: 0;">
+                <figcaption class="figure-caption">
+                    {% comment %} TODO: Ability to choose what values are shown here {% endcomment %}
+                    <strong>Season:</strong> {{ episode.season.name }}
+                    <br>
+                    <strong>Episode:</strong> {{ episode.number }}. {{ episode.name }}
+                    <br>
+                    <strong>Date:</strong> {{ episode.release_date }}
+                    <br>
+                    <strong>Duration:</strong> {{ episode.duration|seconds_to_time }}
+                    <br>
+                </figcaption>
             </div>
         </div>
-    {% endfor %}
+    </div>
+{% endfor %}
 </div>

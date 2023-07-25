@@ -38,6 +38,8 @@ json_file = { git = "https://github.com/26b-dream/json-file" }
 html_file = { git = "https://github.com/26b-dream/html-file" }
 pillow = "^9.5.0"
 cryptography = "^41.0.1"
+pytest = "^7.4.0"
+sorl-thumbnail = "^12.9.0"
 
 [tool.poetry.group.dev]
 optional = true

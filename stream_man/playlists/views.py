@@ -55,7 +55,8 @@ class Cards:
 
             # Because the cookie can be set to any arbitrary value it needs to be forced to be an integer
             columns = int(request.COOKIES.get(f"playlist_{playlist_id}_columns", 4))
-            context = {"playlist": playlist, "episodes": episodes, "columns": columns}
+            image_width = int(request.COOKIES.get(f"playlist_{playlist_id}_image_width", 1920))
+            context = {"playlist": playlist, "episodes": episodes, "columns": columns, "image_width": image_width}
 
             return render(request, "playlists/cards/episodes.html", context)
 
@@ -190,7 +191,8 @@ class Forms:
         def form(request: HttpRequest, playlist_id: int) -> HttpResponse:
             playlist = get_object_or_404(Playlist, id=playlist_id)
             columns = request.COOKIES.get(f"playlist_{playlist_id}_columns", 4)
-            form = VisualConfigForm(initial={"columns": columns})
+            image_width = request.COOKIES.get(f"playlist_{playlist_id}_image_width", 1920)
+            form = VisualConfigForm(initial={"columns": columns, "image_width": image_width})
             context = {"playlist": playlist, "form": form}
             return render(request, "playlists/forms/visual_config.html", context)
 
@@ -202,9 +204,11 @@ class Forms:
 
             if form.is_valid():
                 columns = form.cleaned_data["columns"]
-                messages.success(request, "Visual configuration updated")
+                image_width = form.cleaned_data["image_width"]
                 response = render(request, "playlists/forms/visual_config.html", context)
                 response.set_cookie(f"playlist_{playlist_id}_columns", columns)
+                response.set_cookie(f"playlist_{playlist_id}_image_width", image_width)
+                messages.success(request, "Visual configuration updated")
                 return response
 
             # Manage invalid form
