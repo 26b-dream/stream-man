@@ -5,7 +5,6 @@ import logging
 from typing import TYPE_CHECKING
 
 from common.base_scraper import ScraperShowShared
-from common.constants import DOWNLOADED_FILES_DIR
 
 from stream_man.settings import MEDIA_ROOT
 
@@ -18,25 +17,10 @@ if TYPE_CHECKING:
 class CrunchyRollShared(ScraperShowShared):
     WEBSITE = "Crunchyroll"
     DOMAIN = "https://www.crunchyroll.com"
-    FILES_DIR = DOWNLOADED_FILES_DIR / WEBSITE
 
     def image_path(self, image_url: str) -> ExtendedPath:
         image_name = image_url.split("/")[-1]
-        return DOWNLOADED_FILES_DIR / self.WEBSITE / "images" / image_name
-
-    def outdated_image(self, image_url: str, image_type: str) -> bool:
-        """Check if a specific image is missing or outdated"""
-        image_path = self.image_path(image_url)
-        if image_path.outdated():
-            logger = logging.getLogger(f"{self.logger_identifier()}.Outdated {image_type} file")
-            logger.info(self.pretty_file_path(image_path))
-            return True
-
-        return False
-
-    def pretty_file_path(self, file_path: ExtendedPath) -> str:
-        """Returns the file path relative to the downloaded files directory which is easier to read when logging"""
-        return str(file_path.relative_to(DOWNLOADED_FILES_DIR))
+        return self.files_dir() / "images" / image_name
 
     def download_image(self, page: Page, image_url: str, image_source: str) -> None:
         """Download a specific image using playwright"""
@@ -49,7 +33,7 @@ class CrunchyRollShared(ScraperShowShared):
             page.goto(image_url, wait_until="networkidle")
             page.wait_for_timeout(1000)
 
-            self.playwright_wait_for_files(page, 10, None, image_path)
+            self.playwright_wait_for_files(page, image_path)
 
     def save_playwright_images(self, response: Response) -> None:
         """Save every image file that is requested by playwright"""

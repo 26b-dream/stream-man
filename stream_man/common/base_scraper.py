@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
@@ -19,9 +20,11 @@ from media.models import Episode, Season, Show
 
 if TYPE_CHECKING:
     from re import Pattern
-    from typing import Optional
+    from typing import Optional, TypeVar
 
-    from playwright.sync_api._generated import BrowserContext, Page, Playwright
+    from playwright.sync_api._generated import BrowserContext, Page, Playwright, Response
+
+    T = TypeVar("T", bound="ExtendedPath")
 
 
 class ScraperShared:
@@ -47,11 +50,17 @@ class ScraperShared:
         )
 
     def playwright_wait_for_files(
-        self, page: Page, seconds: int, timestamp: Optional[datetime], *files: ExtendedPath
+        self,
+        page: Page,
+        files: list[T] | T,
+        timestamp: Optional[datetime] = None,
+        seconds: int = 10,
     ) -> None:
         """Downloads will sometimes randomly not be detected by playwright if nothing is being executed. This function
         will simply execute a query selector until the file exists and is up to date. This is also useful to detect
         changes in the website causing files to no longer download or be detected"""
+        if not isinstance(files, list):
+            files = [files]
 
         for _ in range(seconds):
             if all(
@@ -68,6 +77,11 @@ class ScraperShared:
 
         raise FileNotFoundError(f"Files {', '.join(missing_files)} were not found")
 
+    def playwright_save_json_response(self, response: Response, file_path: JSONFile) -> None:
+        """Save a JSON response from playwright"""
+        raw_json = response.json()
+        file_path.write(json.dumps(raw_json))
+
 
 class ScraperUpdateShared(ScraperShared):
     """Shared code for scraping update information"""
@@ -80,6 +94,10 @@ class ScraperShowShared(ABC, ScraperShared):
     WEBSITE: str
 
     @classmethod
+    def website_name(cls) -> str:
+        return cls.WEBSITE
+
+    @classmethod
     def is_valid_show_url(cls, show_url: str) -> bool:
         """Check if a URL is a valid show URL for a specific scraper"""
         return bool(re.search(cls.URL_REGEX, show_url))
@@ -87,14 +105,28 @@ class ScraperShowShared(ABC, ScraperShared):
     def __init__(self, show_url: str) -> None:
         self.show_id = str(re.strict_search(self.URL_REGEX, show_url).group("show_id"))
         self.show_info = Show().get_or_new(show_id=self.show_id, website=self.WEBSITE)[0]
-        self.show_json_path = JSONFile(DOWNLOADED_FILES_DIR, self.WEBSITE, "show", f"{self.show_id}.json")
-
-    @classmethod
-    def website_name(cls) -> str:
-        return cls.WEBSITE
+        self.show_json_path = JSONFile(self.files_dir(), "show.json")
 
     def show_object(self) -> Show:
         return self.show_info
+
+    def files_dir(self) -> ExtendedPath:
+        return DOWNLOADED_FILES_DIR / self.WEBSITE / self.show_id
+
+    def pretty_file_path(self, file_path: ExtendedPath) -> str:
+        """Returns the file path relative to the downloaded files directory which is easier to read when logging"""
+        return str(file_path.relative_to(DOWNLOADED_FILES_DIR))
+
+    def check_if_outdated(
+        self, file_path: ExtendedPath, file_type: str, minimum_timestamp: Optional[datetime] = None
+    ) -> bool:
+        """Check if a specific image is missing or outdated"""
+        if file_path.outdated():
+            logger = logging.getLogger(f"{self.logger_identifier()}.Outdated {file_type}")
+            logger.info(self.pretty_file_path(file_path))
+            return True
+
+        return False
 
     def logger_identifier(self) -> str:
         if self.show_info.name:
@@ -164,7 +196,7 @@ class ScraperShowShared(ABC, ScraperShared):
     @lru_cache(maxsize=1024)  # Value will never change
     def season_json_path(self, season_id: str) -> JSONFile:
         """Path for the JSON file that lists all of the episodes for a specific season"""
-        return JSONFile(DOWNLOADED_FILES_DIR, self.WEBSITE, "season", self.show_id, f"{season_id}.json")
+        return JSONFile(self.files_dir(), "season", f"{season_id}.json")
 
     def set_update_at(self) -> None:
         """Set the update_at value of show based on when the last episode aired."""

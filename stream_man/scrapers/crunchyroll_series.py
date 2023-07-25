@@ -1,7 +1,6 @@
 """PLugin for crunchyroll show"""
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -29,94 +28,82 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
     def __init__(self, show_url: str) -> None:
         super().__init__(show_url)
         self.show_url = f"{self.DOMAIN}/series/{self.show_id}"
-        self.show_seasons_json_path = JSONFile(self.FILES_DIR, "show_seasons", f"{self.show_id}.json")
+        self.show_seasons_json_path = JSONFile(self.files_dir(), "show_seasons.json")
 
     def outdated_files(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if any of the files are missing or outdated"""
         # This seems like a silly way of checking multiple files, but it allows for every file to be checked even if a
-        # file is found to be missing, this is useful for logging purposes
-        output = False
-        output = self.outdated_show_files(minimum_timestamp) or output
+        # file is found to be missing, this is useful for logging purposes. A single pipe could be used instead, but
+        # this is easier to read and understand.
+        output = self.outdated_show_files(minimum_timestamp)
         output = self.outdated_seasons_files(minimum_timestamp) or output
         output = self.outdated_episode_images() or output
         return output
 
     def outdated_show_files(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if any of the show files are missing or outdated"""
-        output = False
-        output = self.outdated_show_json(minimum_timestamp) or output
+        output = self.outdated_show_json(minimum_timestamp)
         output = self.outdated_show_image() or output
         return output
 
     def outdated_show_json(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if any of the show JSON files are missing or outdated"""
-        outdated_files = False
-        logger = logging.getLogger(f"{self.logger_identifier()}.Outdated show file")
-
-        if self.show_json_path.outdated(minimum_timestamp):
-            logger.info(self.pretty_file_path(self.show_json_path))
-            outdated_files = True
-
-        if self.show_seasons_json_path.outdated(minimum_timestamp):
-            logger.info(self.pretty_file_path(self.show_seasons_json_path))
-            outdated_files = True
-
-        return outdated_files
+        output = self.check_if_outdated(self.show_json_path, "Show JSON", minimum_timestamp)
+        output = self.check_if_outdated(self.show_seasons_json_path, "Show JSON", minimum_timestamp) or output
+        return output
 
     def outdated_show_image(self) -> bool:
         """Check if any of the show image are missing or outdated"""
         if self.show_json_path.exists():
             image_url = self.show_json_path.parsed()["data"][0]["images"]["poster_wide"][0][-1]["source"]
-            return self.outdated_image(image_url, "show")
+            image_path = self.image_path(image_url)
+            return self.check_if_outdated(image_path, "Show image")
 
         return False
 
     def outdated_seasons_files(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if any of the season files are missing or outdated"""
-        output = False
         # If files are missing but they are not the specific files that are being checked return False and assume
         # checking the parent files will cover the child files
         if not self.show_seasons_json_path.exists():
             return False
 
-        show_seasons_json_parsed = self.show_seasons_json_path.parsed()
-        for season in show_seasons_json_parsed["data"]:
-            # This will just track if True is returned at least once
+        # This seems like a silly way of checking multiple files, but it allows for every file to be checked even if a
+        # file is found to be missing, this is useful for logging purposes.
+        output = False
+        seasons = self.show_seasons_json_path.parsed()["data"]
+        for season in seasons:
             output = self.outdated_season_files(season["id"], minimum_timestamp) or output
+
         return output
 
     def outdated_season_files(self, season_id: str, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if any of the season files for a specific season are missing or outdated, having this as a seperate
         function makes it easier to check what seasons need to be updated"""
         file_path = self.season_json_path(season_id)
-        if file_path.outdated(minimum_timestamp):
-            logger = logging.getLogger(f"{self.logger_identifier()}.Outdated season file")
-            logger.info(self.pretty_file_path(file_path))
-            return True
-
-        return False
+        return self.check_if_outdated(file_path, "Season JSON", minimum_timestamp)
 
     def outdated_episode_images(self) -> bool:
         """Check if any of the downloaded episode image files are missing or outdated"""
-        outdated_files = False
+        output = False
 
-        # If files are missing but they are not the specific files that are being checked return False and assume
+        # If files are missing and they are not the specific files that are being checked return False and assume
         # checking the parent files will cover the child files
         if not self.show_seasons_json_path.exists():
-            return outdated_files
+            return False
 
         for season in self.show_seasons_json_path.parsed()["data"]:
             season_json_path = self.season_json_path(season["id"])
 
             if season_json_path.exists():
                 season_json_parsed = self.season_json_path(season["id"]).parsed()
-
                 for episode in season_json_parsed["data"]:
                     if episode_images := episode.get("images"):
                         image_url = episode_images["thumbnail"][0][-1]["source"]
-                        outdated_files = self.outdated_image(image_url, "episode") or outdated_files
+                        image_path = self.image_path(image_url)
+                        output = self.check_if_outdated(image_path, "Episode image") or output
 
-        return outdated_files
+        return output
 
     def download_all(self, minimum_timestamp: Optional[datetime] = None) -> None:
         """Download all of the files that are outdated or do not exist"""
@@ -145,7 +132,7 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
             page.goto(self.show_url, wait_until="networkidle")
 
             files = [self.show_json_path, self.show_seasons_json_path]
-            self.playwright_wait_for_files(page, 10, minimum_timestamp, *files)
+            self.playwright_wait_for_files(page, files, minimum_timestamp)
 
     def download_show_image(self, page: Page) -> None:
         """Download the show image if it is outdated or do not exist, this is a seperate function from downloading the
@@ -161,7 +148,6 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
         for season in show_seasons_json_parsed["data"]:
             # If all of the season files are up to date nothing needs to be done
             if self.outdated_season_files(season["id"], minimum_timestamp):
-                logger.info(season["title"])
                 # All season pages have to be downloaded from the show page so open the show page
                 # Only do this one time, all later pages can reuse existing page
                 if self.show_url not in page.url:
@@ -170,6 +156,7 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
 
                 # Season selector only exists for shows with multiple seasons
                 if page.query_selector("div[class='season-info']"):
+                    logger.info(season["title"])
                     # Sleep for 5 seconds to avoid being banned, do the timeout first so the initial visit doesn't
                     # immediately hit the next season button which would look suspicious
                     page.wait_for_timeout(5000)
@@ -180,9 +167,7 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
                     # Click season
                     self.season_button(page, season).click()
 
-                # Wait for files to exist
-                episodes_json_path = self.season_json_path(season["id"])
-                self.playwright_wait_for_files(page, 10, minimum_timestamp, episodes_json_path)
+                self.playwright_wait_for_files(page, self.season_json_path(season["id"]), minimum_timestamp)
 
     def download_episodes(self, page: Page) -> None:
         """Download all of the episode files that are outdated or do not exist"""
@@ -200,16 +185,16 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
         """Save specific files that are requested by playwright"""
         # Example URL: https://www.crunchyroll.com/content/v2/cms/series/GEXH3W4JP?locale=en-US
         if f"series/{self.show_id}?" in response.url:
-            self.show_json_path.write(json.dumps(response.json()))
+            self.playwright_save_json_response(response, self.show_json_path)
 
         # Example URL: https://www.crunchyroll.com/content/v2/cms/series/GEXH3W4JP/seasons?locale=en-US
         elif f"series/{self.show_id}/seasons?" in response.url:
-            self.show_seasons_json_path.write(json.dumps(response.json()))
+            self.playwright_save_json_response(response, self.show_seasons_json_path)
 
         # Example URL: https://www.crunchyroll.com/content/v2/cms/seasons/GYQ4MQ496/episodes?locale=en-US
         elif "episodes?" in response.url:
             season_id = re.strict_search(r"seasons/(.*)/episodes?", response.url).group(1)
-            self.season_json_path(season_id).write(json.dumps(response.json()))
+            self.playwright_save_json_response(response, self.season_json_path(season_id))
 
     def season_button(self, page: Page, season: dict[str, str]) -> ElementHandle:
         """Find the button that changes the season shown on the show page"""
