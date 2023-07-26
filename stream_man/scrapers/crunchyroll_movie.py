@@ -10,7 +10,7 @@ from common.abstract_scraper import AbstractScraperClass
 from json_file import JSONFile
 from media.models import Episode, Season
 from playwright.sync_api import sync_playwright
-from playwright_stealth import stealth_sync
+from playwright_stealth import stealth_sync  # pyright: ignore [reportMissingTypeStubs]
 from scrapers.crunchyroll_shared import CrunchyRollShared
 
 if TYPE_CHECKING:
@@ -94,13 +94,13 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
         movie because it is easier to download all of the images after downloading all of the JSON files"""
         parsed_show = self.movie_extra_json_path.parsed_cached()["data"][0]
         image_url = parsed_show["images"]["poster_wide"][0][-1]["source"]
-        self.download_image(page, image_url, "movie")
+        self.playwright_download_image(page, image_url, "movie")
 
     def download_episodes(self, page: Page) -> None:
         """Download all of the episode files that are outdated or do not exist"""
         parsed_movie_extra = self.movie_json_path.parsed_cached()["data"][0]
         image_url = parsed_movie_extra["images"]["thumbnail"][0][-1]["source"]
-        self.download_image(page, image_url, "episode")
+        self.playwright_download_image(page, image_url, "episode")
 
     def save_playwright_files(self, response: Response) -> None:
         """Save specific files that are requested by playwright"""
@@ -122,21 +122,21 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
-        if self.show_info.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
+        if self.show.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
             parrsed_movie = self.movie_json_path.parsed_cached()["data"][0]
             parsed_movie_posters = self.movie_extra_json_path.parsed_cached()["data"][0]
 
-            self.show_info.name = parrsed_movie["title"]
-            self.show_info.description = parrsed_movie["description"]
-            self.show_info.url = self.movie_url
+            self.show.name = parrsed_movie["title"]
+            self.show.description = parrsed_movie["description"]
+            self.show.url = self.movie_url
             # poster_wide is an image with a 16x9 ratio (poster_tall is 6x9)
             # [0][-1] the last image listed is the highest resolution
             image_url = parsed_movie_posters["images"]["poster_wide"][0][-1]["source"]
-            self.set_image(self.show_info, image_url)
-            self.show_info.favicon_url = self.DOMAIN + "/favicons/favicon-32x32.png"
-            self.show_info.deleted = False
-            self.show_info.media_type = "Movie"
-            self.show_info.add_timestamps_and_save(self.movie_json_path)
+            self.set_image(self.show, image_url)
+            self.show.favicon_url = self.DOMAIN + "/favicons/favicon-32x32.png"
+            self.show.deleted = False
+            self.show.media_type = "Movie"
+            self.show.add_timestamps_and_save(self.movie_json_path)
 
     def import_seasons(
         self,
@@ -147,13 +147,13 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
         # For simplicity just use the show_id as the season_id and episode_id because although there is a second ID that
         # can be found it's not really specific for anything and there is no benefit of mixing it in when just using the
         # one single ID for everything works fine.
-        season_info = Season().get_or_new(season_id=self.show_id, show=self.show_info)[0]
-        if season_info.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
-            season_info.sort_order = 0
-            season_info.number = 1
-            season_info.name = parsed_movie["title"]
-            season_info.deleted = False
-            season_info.add_timestamps_and_save(self.movie_json_path)
+        season = Season().get_or_new(season_id=self.show_id, show=self.show)[0]
+        if season.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
+            season.sort_order = 0
+            season.number = 1
+            season.name = parsed_movie["title"]
+            season.deleted = False
+            season.add_timestamps_and_save(self.movie_json_path)
 
     def import_episodes(
         self,
@@ -166,21 +166,21 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
         # For simplicity just use the show_id as the season_id and episode_id because although there is a second ID that
         # can be found it's not really specific for anything and there is no benefit of mixing it in when just using the
         # one single ID for everything works fine.
-        season_info = Season().get_or_new(season_id=self.show_id, show=self.show_info)[0]
-        episode_info = Episode().get_or_new(episode_id=self.show_id, season=season_info)[0]
-        if episode_info.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
-            episode_info.sort_order = 0
-            episode_info.name = parsed_movie["title"]
-            episode_info.number = "1"
-            episode_info.description = parsed_movie["description"]
-            episode_info.duration = parsed_movie["movie_metadata"]["duration_ms"] / 1000
-            episode_info.url = f"{self.DOMAIN}/watch/{self.show_id}"
+        season = Season().get_or_new(season_id=self.show_id, show=self.show)[0]
+        episode = Episode().get_or_new(episode_id=self.show_id, season=season)[0]
+        if episode.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
+            episode.sort_order = 0
+            episode.name = parsed_movie["title"]
+            episode.number = "1"
+            episode.description = parsed_movie["description"]
+            episode.duration = parsed_movie["movie_metadata"]["duration_ms"] / 1000
+            episode.url = f"{self.DOMAIN}/watch/{self.show_id}"
 
             # Movie do not have an air_date value so just use the available date for both
             # This value is only present on the secondary file
             strp = "%Y-%m-%dT%H:%M:%S%z"
-            episode_info.air_date = datetime.strptime(parsed_movie_posters["premium_available_date"], strp)
-            episode_info.release_date = datetime.strptime(parsed_movie_posters["premium_available_date"], strp)
+            episode.air_date = datetime.strptime(parsed_movie_posters["premium_available_date"], strp)
+            episode.release_date = datetime.strptime(parsed_movie_posters["premium_available_date"], strp)
             # Every now and then a show just won't have thumbnails
             # See: https://beta.crunchyroll.com/series/G79H23VD4/im-kodama-kawashiri (May be updated later)
 
@@ -188,8 +188,8 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
                 # [0] is the first thumbnail design (as far as I can tell there is always just one)
                 # [0][-1] the last image listed is the highest resolution
                 image_url = episode_images["thumbnail"][0][-1]["source"]
-                self.set_image(episode_info, image_url)
+                self.set_image(episode, image_url)
 
             # No seperate file for episodes so just use the season file
-            episode_info.deleted = False
-            episode_info.add_timestamps_and_save(season_info.info_timestamp)
+            episode.deleted = False
+            episode.add_timestamps_and_save(season.info_timestamp)

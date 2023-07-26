@@ -10,7 +10,7 @@ from common.abstract_scraper import AbstractScraperClass
 from json_file import JSONFile
 from media.models import Episode, Season
 from playwright.sync_api import sync_playwright
-from playwright_stealth import stealth_sync
+from playwright_stealth import stealth_sync  # pyright: ignore [reportMissingTypeStubs]
 from scrapers.crunchyroll_shared import CrunchyRollShared
 
 if TYPE_CHECKING:
@@ -139,7 +139,7 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
         show because it is easier to download all of the images after downloading all of the JSON files"""
         parsed_show = self.show_json_path.parsed_cached()["data"][0]
         image_url = parsed_show["images"]["poster_wide"][0][-1]["source"]
-        self.download_image(page, image_url, "show")
+        self.playwright_download_image(page, image_url, "show")
 
     def download_seasons(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
         """Download all of the season files that are outdated or do not exist"""
@@ -179,7 +179,7 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
             for _, episode in enumerate(season_json_parsed["data"]):
                 if episode_images := episode.get("images"):
                     image_url = episode_images["thumbnail"][0][-1]["source"]
-                    self.download_image(page, image_url, "episode")
+                    self.playwright_download_image(page, image_url, "episode")
 
     def save_playwright_files(self, response: Response) -> None:
         """Save specific files that are requested by playwright"""
@@ -212,22 +212,22 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
         """Import the show information into the database"""
-        if self.show_info.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
+        if self.show.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
             parsed_show = self.show_json_path.parsed_cached()["data"][0]
 
-            self.show_info.name = parsed_show["title"]
-            self.show_info.description = parsed_show["description"]
-            self.show_info.url = self.show_url
+            self.show.name = parsed_show["title"]
+            self.show.description = parsed_show["description"]
+            self.show.url = self.show_url
             # poster_wide is an image with a 16x9 ratio (poster_tall is 6x9)
             # [0][-1] the last image listed is the highest resolution
             image_url = parsed_show["images"]["poster_wide"][0][-1]["source"]
-            self.set_image(self.show_info, image_url)
-            self.show_info.favicon_url = self.DOMAIN + "/favicons/favicon-32x32.png"
+            self.set_image(self.show, image_url)
+            self.show.favicon_url = self.DOMAIN + "/favicons/favicon-32x32.png"
             # I don't see anything on Cruncyhroll that shows the difference between a TV Series, ONA, or OVA, so just list
             # this as a series which is a generic catch all term
-            self.show_info.media_type = "Series"
-            self.show_info.deleted = False
-            self.show_info.add_timestamps_and_save(self.show_json_path)
+            self.show.media_type = "Series"
+            self.show.deleted = False
+            self.show.add_timestamps_and_save(self.show_json_path)
 
     def import_seasons(
         self,
@@ -237,19 +237,19 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
         """Import the season information into the database"""
         show_seasons_json_parsed = self.show_seasons_json_path.parsed_cached()
 
-        for sort_order, season in enumerate(show_seasons_json_parsed["data"]):
-            season_json_path = self.season_json_path(season["id"])
+        for sort_order, parsed_season in enumerate(show_seasons_json_parsed["data"]):
+            season_json_path = self.season_json_path(parsed_season["id"])
             season_json_parsed = season_json_path.parsed_cached()
             parsed_episode = season_json_parsed["data"][0]
 
-            season_info = Season().get_or_new(season_id=season["id"], show=self.show_info)[0]
+            season = Season().get_or_new(season_id=parsed_season["id"], show=self.show)[0]
 
-            if season_info.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
-                season_info.number = parsed_episode["season_number"]
-                season_info.name = parsed_episode["season_title"]
-                season_info.sort_order = sort_order
-                season_info.deleted = False
-                season_info.add_timestamps_and_save(season_json_path)
+            if season.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
+                season.number = parsed_episode["season_number"]
+                season.name = parsed_episode["season_title"]
+                season.sort_order = sort_order
+                season.deleted = False
+                season.add_timestamps_and_save(season_json_path)
 
     def import_episodes(
         self,
@@ -261,7 +261,7 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
 
         for season in show_seasons_json_parsed:
             season_json_parsed = self.season_json_path(season["id"]).parsed_cached()
-            season_info = Season().get_or_new(season_id=season["id"], show=self.show_info)[0]
+            season_info = Season().get_or_new(season_id=season["id"], show=self.show)[0]
 
             for i, episode in enumerate(season_json_parsed["data"]):
                 episode_info = Episode().get_or_new(episode_id=episode["id"], season=season_info)[0]
