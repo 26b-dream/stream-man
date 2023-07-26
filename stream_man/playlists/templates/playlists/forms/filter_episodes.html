@@ -70,6 +70,16 @@ but easy to ignore {% endcomment %}
                 {{ form.number_of_episodes.errors }}
             </div>
         </div>
+        <div class="row">
+            <div class="col border text-nowrap">
+                {% comment %} style="max-height: 10em;" - Extra style to limit the height of the website list so it doesn't
+                stretch the entire form in ugly ways {% endcomment %}
+                <div class="overflow-auto" style="max-height: 10em;">
+                    {{ form.deleted }} {{ form.deleted.label }}
+                    {{ form.deleted.errors }}
+                </div>
+            </div>
+        </div>
         <div class="modal-footer">
             <button id="sort-episodes-set-defaults-button"
                     class="btn btn-success"

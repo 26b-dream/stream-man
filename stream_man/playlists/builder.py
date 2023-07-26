@@ -38,6 +38,8 @@ class Builder:
     def __init__(self, episodes: QuerySet[Episode], form: PlaylistSortForm):
         self.episodes = episodes
         self.form = form
+        if self.form.cleaned_data["deleted"] is False:
+            self.episodes = self.episodes.filter(deleted=False)
 
     def _filter_and_sort_episodes(self) -> None:
         """Filter out the episodes and get only the ones that will be returned for the playlist"""
