@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import urllib.request
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from functools import lru_cache
@@ -17,6 +18,8 @@ from extended_path import ExtendedPath
 from html_file import HTMLFile
 from json_file import JSONFile
 from media.models import Episode, Season, Show
+
+from stream_man.settings import MEDIA_ROOT
 
 if TYPE_CHECKING:
     from re import Pattern
@@ -104,11 +107,11 @@ class ScraperShowShared(ABC, ScraperShared):
 
     def __init__(self, show_url: str) -> None:
         self.show_id = str(re.strict_search(self.URL_REGEX, show_url).group("show_id"))
-        self.show_info = Show().get_or_new(show_id=self.show_id, website=self.WEBSITE)[0]
+        self.show = Show().get_or_new(show_id=self.show_id, website=self.WEBSITE)[0]
         self.show_json_path = JSONFile(self.files_dir(), "show.json")
 
     def show_object(self) -> Show:
-        return self.show_info
+        return self.show
 
     def files_dir(self) -> ExtendedPath:
         return DOWNLOADED_FILES_DIR / self.WEBSITE / self.show_id
@@ -129,8 +132,8 @@ class ScraperShowShared(ABC, ScraperShared):
         return False
 
     def logger_identifier(self) -> str:
-        if self.show_info.name:
-            return f"{self.WEBSITE}.{self.show_info.name}"
+        if self.show.name:
+            return f"{self.WEBSITE}.{self.show.name}"
 
         return f"{self.WEBSITE}.{self.show_id}"
 
@@ -159,9 +162,9 @@ class ScraperShowShared(ABC, ScraperShared):
 
         # Mark everything as deleted and let importing mark it as not deleted because this is the easiest way to
         # determine when an entry is deleted
-        Show.objects.filter(id=self.show_info.id, website=self.WEBSITE).update(deleted=True)
-        Season.objects.filter(show=self.show_info).update(deleted=True)
-        Episode.objects.filter(season__show=self.show_info).update(deleted=True)
+        Show.objects.filter(id=self.show.id, website=self.WEBSITE).update(deleted=True)
+        Season.objects.filter(show=self.show).update(deleted=True)
+        Episode.objects.filter(season__show=self.show).update(deleted=True)
 
         self.import_show(minimum_info_timestamp, minimum_modified_timestamp)
         self.import_seasons(minimum_info_timestamp, minimum_modified_timestamp)
@@ -193,22 +196,67 @@ class ScraperShowShared(ABC, ScraperShared):
     ) -> None:
         """Import all of the information for an episode without downloading any of the files"""
 
-    @lru_cache(maxsize=1024)  # Value will never change
     def season_json_path(self, season_id: str) -> JSONFile:
         """Path for the JSON file that lists all of the episodes for a specific season"""
         return JSONFile(self.files_dir(), "season", f"{season_id}.json")
 
     def set_update_at(self) -> None:
         """Set the update_at value of show based on when the last episode aired."""
-        latest_episode = (
-            Episode.objects.filter(season__show=self.show_info, deleted=False).order_by("-release_date").first()
-        )
+        latest_episode = Episode.objects.filter(season__show=self.show, deleted=False).order_by("-release_date").first()
 
         if latest_episode:
             # If the episode aired within a week of the last download update the information weekly
-            if latest_episode.release_date > self.show_info.info_timestamp - timedelta(days=365 / 12):
-                self.show_info.update_at = latest_episode.release_date + timedelta(days=7)
+            if latest_episode.release_date > self.show.info_timestamp - timedelta(days=365 / 12):
+                self.show.update_at = latest_episode.release_date + timedelta(days=7)
             # Any other situation update the information monthly
             else:
-                self.show_info.update_at = self.show_info.info_timestamp + timedelta(days=365 / 12)
-        self.show_info.save()
+                self.show.update_at = self.show.info_timestamp + timedelta(days=365 / 12)
+        self.show.save()
+
+    def image_path(self, image_url: str) -> ExtendedPath:
+        image_name = image_url.split("/")[-1]
+        return self.files_dir() / "images" / image_name
+
+    def playwright_download_image(self, page: Page, image_url: str, image_source: str) -> None:
+        """Download a specific image using playwright"""
+        image_path = self.image_path(image_url)
+
+        if not image_path.exists():
+            logger = logging.getLogger(f"{self.logger_identifier()}.Outdated {image_source} image")
+            logger.info(self.pretty_file_path(image_path))
+            logging.getLogger(f"{self.logger_identifier()}.Downloading").info(image_url)
+            page.goto(image_url, wait_until="networkidle")
+            page.wait_for_timeout(1000)
+
+            # Sometimes images are over 10 MB, when that happens Playwright will have an error because it is unable to
+            # download files larger than 10 MB see: https://github.com/microsoft/playwright/issues/13449
+            # When this happens download the file using urllib instead
+            try:
+                self.playwright_wait_for_files(page, image_path)
+            except FileNotFoundError:
+                self.urllib_downloada_image(image_url, image_source)
+
+    def urllib_downloada_image(self, image_url: str, image_source: str) -> None:
+        """Download a specific image using playwright"""
+        image_path = self.image_path(image_url)
+
+        if not image_path.exists():
+            image_path.parent.mkdir(parents=True, exist_ok=True)
+            urllib.request.urlretrieve(image_url, image_path)
+
+    def save_playwright_images(self, response: Response) -> None:
+        """Save every image file that is requested by playwright"""
+
+        self.image_path(response.url).write(response.body())
+
+    def set_image(self, model_object: Episode | Show, image_url: str):
+        """Set the image for a model object and hardlink the image so it can be accessed through Django"""
+        image_path = self.image_path(image_url)
+        pretty_name = self.pretty_file_path(image_path)
+        model_object.image.name = pretty_name
+
+        # Hardlink the file so it can be served through the server easier
+        media_path = MEDIA_ROOT / pretty_name
+        if not media_path.exists():
+            media_path.parent.mkdir(parents=True, exist_ok=True)
+            media_path.hardlink_to(image_path)
