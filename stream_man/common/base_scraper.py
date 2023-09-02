@@ -7,7 +7,6 @@ import logging
 import urllib.request
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
-from functools import lru_cache
 from time import sleep
 from typing import TYPE_CHECKING
 
@@ -15,7 +14,6 @@ import common.extended_re as re
 from common.constants import DOWNLOADED_FILES_DIR
 from django.db import transaction
 from extended_path import ExtendedPath
-from html_file import HTMLFile
 from json_file import JSONFile
 from media.models import Episode, Season, Show
 
