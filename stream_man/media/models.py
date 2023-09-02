@@ -1,11 +1,9 @@
 """Models for the media app"""
 from __future__ import annotations
 
-import json
 from datetime import date
 from typing import Any, Optional
 
-from common.constants import BASE_DIR
 from django.db import models
 from django_model_helpers import GetOrNew, ModelWithIdAndTimestamp, auto_unique
 
