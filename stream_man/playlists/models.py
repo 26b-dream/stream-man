@@ -50,7 +50,7 @@ class Playlist(models.Model):
 
         random_episode = self.random_episode()
         if random_episode:
-            return random_episode.thumbnail_url
+            return random_episode.image.url
 
         return "/static/no_thumbnail.png"
 
