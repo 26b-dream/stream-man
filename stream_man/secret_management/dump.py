@@ -8,8 +8,8 @@ from json_file import JSONFile
 
 
 def main() -> None:
-    password = getpass("Credentials password")
-    credentials = Credentials.load_credentials(password)
+    Credentials.login()
+    credentials = Credentials.load_credentials()
 
     JSONFile(BASE_DIR / "secret_management" / "credentials.json").write(json.dumps(credentials))
 

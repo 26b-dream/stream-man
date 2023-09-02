@@ -1,21 +1,20 @@
 # TODO: Eventually allow configuration through the web interface
 from getpass import getpass
+
 import _activate_django  # pyright: ignore[reportUnusedImport] # pylint: disable=W0611
-
-from common.scrapers import Scraper
-
 from common.credential_mangement import Credentials
+from common.scrapers import Scraper
 
 
 def main() -> None:
-    password = getpass("Credentials password")
+    Credentials.login()
 
     # If the credential file doesn't exist create it
     if not Credentials.CREDENTIALS_FILE.exists():
-        Credentials.dump_credentials({}, password)
+        Credentials.save_credentials({})
 
     # Load credentials
-    credentials = Credentials.load_credentials(password)
+    credentials = Credentials.load_credentials()
 
     # Display a list of scrapers
     for i, credential_keys in enumerate(Scraper.credential_keys()):
@@ -34,7 +33,7 @@ def main() -> None:
 
         credentials[scraper_name][key] = getpass(f"{scraper_name}: {key}:")
 
-    Credentials.dump_credentials(credentials, password)
+    Credentials.save_credentials(credentials)
 
 
 if __name__ == "__main__":
