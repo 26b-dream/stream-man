@@ -82,6 +82,7 @@ class ScraperShared:
         """Save a JSON response from playwright"""
         raw_json = response.json()
         file_path.write(json.dumps(raw_json))
+        file_path.parsed_cached_value = raw_json
 
 
 class ScraperUpdateShared(ScraperShared):
@@ -122,7 +123,7 @@ class ScraperShowShared(ABC, ScraperShared):
         self, file_path: ExtendedPath, file_type: str, minimum_timestamp: Optional[datetime] = None
     ) -> bool:
         """Check if a specific image is missing or outdated"""
-        if file_path.outdated():
+        if file_path.outdated(minimum_timestamp):
             logger = logging.getLogger(f"{self.logger_identifier()}.Outdated {file_type}")
             logger.info(self.pretty_file_path(file_path))
             return True
@@ -163,6 +164,8 @@ class ScraperShowShared(ABC, ScraperShared):
         Show.objects.filter(id=self.show.id, website=self.WEBSITE).update(deleted=True)
         Season.objects.filter(show=self.show).update(deleted=True)
         Episode.objects.filter(season__show=self.show).update(deleted=True)
+
+        # Clear all caches just in case
 
         self.import_show(minimum_info_timestamp, minimum_modified_timestamp)
         self.import_seasons(minimum_info_timestamp, minimum_modified_timestamp)
@@ -216,7 +219,7 @@ class ScraperShowShared(ABC, ScraperShared):
         return self.files_dir() / "images" / image_name
 
     def playwright_download_image(self, page: Page, image_url: str, image_source: str) -> None:
-        """Download a specific image using playwright"""
+        """Download a specific image using playwright if it does not exist"""
         image_path = self.image_path(image_url)
 
         if not image_path.exists():

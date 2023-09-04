@@ -5,7 +5,7 @@ import _activate_django  # pyright: ignore[reportUnusedImport] # pylint: disable
 from .scraper_test_base import ScraperTestBase
 
 
-class TestCrunchyrollSeries(ScraperTestBase):
+class TestCrunchyroll(ScraperTestBase):
     def test_multiple_season(self):
         # Code Geass was chosen because it is an old show that is unlikely to get new episodes, and the license is
         # likely to be reneweed if it expires.
