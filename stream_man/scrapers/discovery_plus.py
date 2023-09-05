@@ -133,7 +133,7 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
                     season_info = entry["attributes"]["component"]["filters"][0]
                     # Determine what season is embedded in the show JSON, if no value is found assume this is a movie
                     season_id = season_info.get("initiallySelectedOptionIds", ["movie"])[0]
-                    self.season_json_path(season_id).write(dumped_json)
+                    self.playwright_save_json_response(response, self.season_json_path(season_id))
 
         # These are the JSON files that are recieved when changing seasons on the show page. The initially displayed
         # season on the show page does not send a season specific JSON file and instead adds that information to the
@@ -143,7 +143,7 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
             parsed_url = urlparse(response.url)
             query_params = parse_qs(parsed_url.query)
             season_number = query_params["pf[seasonNumber]"][0]
-            self.season_json_path(season_number).write(json.dumps(response.json()))
+            self.playwright_save_json_response(response, self.season_json_path(season_number))
 
     def download_all(self, minimum_timestamp: Optional[datetime] = None) -> None:
         """Download all of the files that are outdated or do not exist"""
