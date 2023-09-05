@@ -7,6 +7,7 @@ import logging
 import urllib.request
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
+from functools import cache
 from time import sleep
 from typing import TYPE_CHECKING
 
@@ -14,6 +15,7 @@ import common.extended_re as re
 from common.constants import DOWNLOADED_FILES_DIR
 from django.db import transaction
 from extended_path import ExtendedPath
+from html_file import HTMLFile
 from json_file import JSONFile
 from media.models import Episode, Season, Show
 
@@ -26,6 +28,12 @@ if TYPE_CHECKING:
     from playwright.sync_api._generated import BrowserContext, Page, Playwright, Response
 
     T = TypeVar("T", bound="ExtendedPath")
+
+
+@cache
+def season_json_path_cached(files_dir: ExtendedPath, season_id: str) -> JSONFile:
+    """Path for the JSON file that lists all of the episodes for a specific season"""
+    return JSONFile(files_dir, "season", f"{season_id}.json")
 
 
 class ScraperShared:
@@ -83,6 +91,11 @@ class ScraperShared:
         raw_json = response.json()
         file_path.write(json.dumps(raw_json))
         file_path.parsed_cached_value = raw_json
+
+    def playwright_save_html_response(self, page: Page, file_path: HTMLFile) -> None:
+        """Save a JSON response from playwright"""
+        file_path.write(page.content())
+        file_path.parsed_cached_value = None
 
 
 class ScraperUpdateShared(ScraperShared):
@@ -199,7 +212,7 @@ class ScraperShowShared(ABC, ScraperShared):
 
     def season_json_path(self, season_id: str) -> JSONFile:
         """Path for the JSON file that lists all of the episodes for a specific season"""
-        return JSONFile(self.files_dir(), "season", f"{season_id}.json")
+        return season_json_path_cached(self.files_dir(), season_id)
 
     def set_update_at(self) -> None:
         """Set the update_at value of show based on when the last episode aired."""
