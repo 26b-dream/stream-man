@@ -6,6 +6,7 @@ import secrets
 from base64 import urlsafe_b64decode as b64d
 from base64 import urlsafe_b64encode as b64e
 from getpass import getpass
+from typing import Optional
 
 from common.constants import BASE_DIR
 from cryptography.fernet import Fernet
@@ -24,8 +25,10 @@ class Credentials:
     password = ""
 
     @classmethod
-    def login(cls):
-        if not cls.password:
+    def login(cls, hardcoded_password: Optional[str] = None):
+        if hardcoded_password:
+            cls.password = hardcoded_password
+        else:
             cls.password = getpass("Credentials password")
 
     @classmethod
