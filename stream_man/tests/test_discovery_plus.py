@@ -12,7 +12,7 @@ class TestDiscoveryPlus(ScraperTestBase):
 
     def test_single_season(self):
         # This TV show was just randomly chosen
-        self.compare_all("https://www.discoveryplus.com/show/the-killing-season-us")
+        self.compare_all("https://www.discoveryplus.com/show/prisoner-of-the-prophet-us")
 
     def test_movie(self):
         # This movie was just randomly chosen because it was the first result when searching the word "movie" on the
