@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from functools import cache
 from time import sleep
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import common.extended_re as re
 from common.constants import DOWNLOADED_FILES_DIR
@@ -25,7 +25,8 @@ if TYPE_CHECKING:
     from re import Pattern
     from typing import Optional, TypeVar
 
-    from playwright.sync_api._generated import BrowserContext, Page, Playwright, Response
+    from playwright._impl._api_structures import Position
+    from playwright.sync_api._generated import BrowserContext, ElementHandle, Locator, Page, Playwright, Response
 
     T = TypeVar("T", bound="ExtendedPath")
 
@@ -137,17 +138,59 @@ class ScraperShowShared(ABC, ScraperShared):
     ) -> bool:
         """Check if a specific image is missing or outdated"""
         if file_path.outdated(minimum_timestamp):
-            logger = logging.getLogger(f"{self.logger_identifier()}.Outdated {file_type}")
+            logger = logging.getLogger(f"{self.logger_identifier()}:Outdated:{file_type}")
             logger.info(self.pretty_file_path(file_path))
             return True
 
         return False
 
+    def logged_goto(
+        self,
+        page: Page,
+        url: str,
+        msg: Optional[str] = None,
+        timeout: Optional[float] = None,
+        wait_until: Optional[Literal["commit", "domcontentloaded", "load", "networkidle"]] = None,
+        referer: Optional[str] = None,
+    ) -> None:
+        """Go to a URL and log it to the logger"""
+        if not msg:
+            msg = url
+        logging.getLogger(f"{self.logger_identifier()}.Opening").info(msg)
+        page.goto(url, timeout=timeout, wait_until=wait_until, referer=referer)
+
+    def logged_click(
+        self,
+        element: ElementHandle | Locator,
+        msg: str,
+        modifiers: Optional[list[Literal["Alt", "Control", "Meta", "Shift"]]] = None,
+        position: Optional[Position] = None,
+        delay: Optional[float] = None,
+        button: Optional[Literal["left", "middle", "right"]] = None,
+        click_count: Optional[int] = None,
+        timeout: Optional[float] = None,
+        force: Optional[bool] = None,
+        no_wait_after: Optional[bool] = None,
+        trial: Optional[bool] = None,
+    ) -> None:
+        logging.getLogger(f"{self.logger_identifier()}.Clicking").info(msg)
+        element.click(
+            modifiers=modifiers,
+            position=position,
+            delay=delay,
+            button=button,
+            click_count=click_count,
+            timeout=timeout,
+            force=force,
+            no_wait_after=no_wait_after,
+            trial=trial,
+        )
+
     def logger_identifier(self) -> str:
         if self.show.name:
-            return f"{self.WEBSITE}.{self.show.name}"
+            return f"{self.WEBSITE}:{self.show.name}"
 
-        return f"{self.WEBSITE}.{self.show_id}"
+        return f"{self.WEBSITE}:{self.show_id}"
 
     def update(
         self, minimum_info_timestamp: Optional[datetime] = None, minimum_modified_timestamp: Optional[datetime] = None
@@ -235,11 +278,8 @@ class ScraperShowShared(ABC, ScraperShared):
         """Download a specific image using playwright if it does not exist"""
         image_path = self.image_path(image_url)
 
-        if not image_path.exists():
-            logger = logging.getLogger(f"{self.logger_identifier()}.Outdated {image_source} image")
-            logger.info(self.pretty_file_path(image_path))
-            logging.getLogger(f"{self.logger_identifier()}.Downloading").info(image_url)
-            page.goto(image_url, wait_until="networkidle")
+        if self.check_if_outdated(image_path, f"{image_source} image"):
+            self.logged_goto(page, image_url, image_url, wait_until="networkidle")
             page.wait_for_timeout(1000)
 
             # Sometimes images are over 10 MB, when that happens Playwright will have an error because it is unable to
