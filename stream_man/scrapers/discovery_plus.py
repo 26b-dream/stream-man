@@ -59,7 +59,7 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
     def episode_image_url(self, image_id: str, season_id: str) -> str:
         # Go through all the included images and find the image that matches
         file_path = self.season_json_path(season_id)
-        for entry in file_path.parsed()["included"]:
+        for entry in file_path.parsed_cached()["included"]:
             # Find matching value
             if entry["id"] == image_id:
                 return entry["attributes"]["src"]
@@ -68,16 +68,15 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
 
     def outdated_files(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if any of the files are missing or outdated"""
-        output = self.outdated_show_files(minimum_timestamp)
-        output = self.outdated_seasons_files(minimum_timestamp) or output
-        output = self.outdated_episodes_files() or output
-        return output
+        return (
+            self.outdated_show_files(minimum_timestamp)
+            or self.outdated_seasons_files(minimum_timestamp)
+            or self.outdated_episodes_files()
+        )
 
     def outdated_show_files(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if any of the show files are missing or outdated"""
-        output = self.outdated_show_json(minimum_timestamp)
-        output = self.outdated_show_image() or output
-        return output
+        return self.outdated_show_json(minimum_timestamp) or self.outdated_show_image()
 
     def outdated_show_json(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if the show json file is missing or outdated"""
@@ -117,6 +116,34 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
                             image_path = self.image_path(image_url)
                             output = self.check_if_outdated(image_path, "Episode Image") or output
         return output
+
+    def save_playwright_files(self, response: Response) -> None:
+        # This is the JSON file that is recieved when loading up the show page
+        if self.partial_show_json_url in response.url:
+            parsed_json = response.json()
+            dumped_json = json.dumps(parsed_json)
+            self.show_json_path.write(dumped_json)
+
+            # The show files also include information for the first season shown on screen. Need to determine what the
+            # first season shown on screen is then double save this file as the file with season infomration
+            # Go through all vlaues in the JSON
+            for entry in parsed_json["included"]:
+                # Find the entry that is a list of episodes
+                if entry.get("attributes", {}).get("title") == "Episodes":
+                    season_info = entry["attributes"]["component"]["filters"][0]
+                    # Determine what season is embedded in the show JSON, if no value is found assume this is a movie
+                    season_id = season_info.get("initiallySelectedOptionIds", ["movie"])[0]
+                    self.season_json_path(season_id).write(dumped_json)
+
+        # These are the JSON files that are recieved when changing seasons on the show page. The initially displayed
+        # season on the show page does not send a season specific JSON file and instead adds that information to the
+        # show JSON file, so some of the season files will be the same as the show page JSON file and some of them will
+        # be a unique file
+        elif "pf[seasonNumber]" in response.url:
+            parsed_url = urlparse(response.url)
+            query_params = parse_qs(parsed_url.query)
+            season_number = query_params["pf[seasonNumber]"][0]
+            self.season_json_path(season_number).write(json.dumps(response.json()))
 
     def download_all(self, minimum_timestamp: Optional[datetime] = None) -> None:
         """Download all of the files that are outdated or do not exist"""
@@ -175,34 +202,6 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
                 image_id = episode_parsed["relationships"]["images"]["data"][0]["id"]
                 image_url = self.episode_image_url(image_id, season_number)
                 self.playwright_download_image(page, image_url, "episode")
-
-    def save_playwright_files(self, response: Response) -> None:
-        # This is the JSON file that is recieved when loading up the show page
-        if self.partial_show_json_url in response.url:
-            parsed_json = response.json()
-            dumped_json = json.dumps(parsed_json)
-            self.show_json_path.write(dumped_json)
-
-            # The show files also include information for the first season shown on screen. Need to determine what the
-            # first season shown on screen is then double save this file as the file with season infomration
-            # Go through all vlaues in the JSON
-            for entry in parsed_json["included"]:
-                # Find the entry that is a list of episodes
-                if entry.get("attributes", {}).get("title") == "Episodes":
-                    season_info = entry["attributes"]["component"]["filters"][0]
-                    # Determine what season is embedded in the show JSON, if no value is found assume this is a movie
-                    season_id = season_info.get("initiallySelectedOptionIds", ["movie"])[0]
-                    self.season_json_path(season_id).write(dumped_json)
-
-        # These are the JSON files that are recieved when changing seasons on the show page. The initially displayed
-        # season on the show page does not send a season specific JSON file and instead adds that information to the
-        # show JSON file, so some of the season files will be the same as the show page JSON file and some of them will
-        # be a unique file
-        elif "pf[seasonNumber]" in response.url:
-            parsed_url = urlparse(response.url)
-            query_params = parse_qs(parsed_url.query)
-            season_number = query_params["pf[seasonNumber]"][0]
-            self.season_json_path(season_number).write(json.dumps(response.json()))
 
     def import_show(
         self,
@@ -296,7 +295,7 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
 
     def season_numbers(self) -> list[str]:
         """Get a list of all of the season numbers for the show"""
-        show_json = self.show_json_path.parsed()
+        show_json = self.show_json_path.parsed_cached()
         output: list[str] = []
         # Go through every entry in the JSON file
         for entry in show_json["included"]:
@@ -316,7 +315,7 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
     def season_entry(self, season_id: str) -> dict[str, Any]:
         """Get the information for a specific season"""
         season_json_path = self.season_json_path(season_id)
-        season_json_parsed = season_json_path.parsed()
+        season_json_parsed = season_json_path.parsed_cached()
 
         # This works for all seasons but the first one
         # Check if the main data entry in the JSON file is the season information
@@ -333,7 +332,7 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
 
     def season_episodes(self, season_id: str) -> list[dict[str, Any]]:
         """Get all of the episodes for a specific season"""
-        parsed_seasons = self.season_json_path(season_id).parsed()
+        parsed_seasons = self.season_json_path(season_id).parsed_cached()
         # This can be done with a map but it becomes harder to read
         episode_ids: list[str] = []
         # Go through each entry on the JSON file
@@ -348,7 +347,7 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
 
     def show_entry(self) -> dict[str, Any]:
         """Parse the show JSON file and just return the dictionary that includes information about the show"""
-        show_json_parsed = self.show_json_path.parsed()
+        show_json_parsed = self.show_json_path.parsed_cached()
         for entry in show_json_parsed["included"]:
             if entry.get("attributes", {}).get("alternateId") == self.show_id:
                 return entry
