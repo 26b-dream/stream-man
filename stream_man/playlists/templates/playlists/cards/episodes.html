@@ -15,8 +15,8 @@
                     {{ episode.season.show.name }}
                 </div>
                 {% comment %} Need to convert the image width to a string for it to work correctly {% endcomment %}
-                {% thumbnail episode.image image_width|stringformat:"i" upscale=False as im %}
-                <img src="{{ im.url }}"
+                {% thumbnail episode.image image_width|stringformat:"i" upscale=False as img %}
+                <img src="{{ img.url }}"
                      class="card-img-top"
                      loading="lazy"
                      width="auto"
