@@ -26,16 +26,13 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
 
     def __init__(self, show_url: str) -> None:
         super().__init__(show_url)
-        self.movie_url = f"{self.DOMAIN}/watch/{self.show_id}"
+        self.show_url = f"{self.DOMAIN}/watch/{self.show_id}"
         self.movie_json_path = JSONFile(self.files_dir(), "movie.json")
         self.movie_extra_json_path = JSONFile(self.files_dir(), "movie_extra.json")
 
     def outdated_files(self, minimum_timestamp: Optional[datetime] = None) -> bool:
-        """Check if any of the files are missing or outdated"""
         return (
-            self.outdated_movie_json(minimum_timestamp)
-            or self.outdated_movie_images()
-            or self.outdated_episode_images()
+            self.outdated_movie_json(minimum_timestamp) or self.outdated_movie_image() or self.outdated_episode_image()
         )
 
     def outdated_movie_json(self, minimum_timestamp: Optional[datetime] = None) -> bool:
@@ -45,39 +42,24 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
             self.movie_extra_json_path, "Movie Extra JSON", minimum_timestamp
         )
 
-    def outdated_movie_images(self) -> bool:
+    def outdated_movie_image(self) -> bool:
         """Check if any of the downloaded episode image files are missing or outdated"""
         # If files are missing but they are not the specific files that are being checked return False and assume
         # checking the parent files will cover the child files
         if self.movie_extra_json_path.exists():
-            image_url = self.movie_image_url()
+            image_url = self.strict_image_url(self.movie_extra_json_path, "poster_wide")
             image_path = self.image_path(image_url)
             return self.check_if_outdated(image_path, "Movie image")
 
         return False
 
-    def outdated_episode_images(self) -> bool:
+    def outdated_episode_image(self) -> bool:
         # Check if the main movie image file exists
         if self.movie_json_path.exists():
-            image_path = self.image_path(self.episode_image_url())
+            image_url = self.strict_image_url(self.movie_json_path, "thumbnail")
+            image_path = self.image_path(image_url)
             return self.check_if_outdated(image_path, "Episode image")
         return False
-
-    def movie_image_url(self) -> str:
-        """Return the URL of the thumbnail image"""
-        # ["poster_wide"] array of different possible images although I have never seen one with more than one.
-        # [0] Just always use the first image that is given
-        # [-1] The last image listed is the highest resolution
-        # ["source"] The URL of the image
-        return self.movie_extra_json_path.parsed_cached()["data"][0]["images"]["poster_wide"][0][-1]["source"]
-
-    def episode_image_url(self) -> str:
-        """Return the URL of the thumbnail image"""
-        # ["thumbnail"] array of different possible images although I have never seen one with more than one.
-        # [0] Just always use the first image that is given
-        # [-1] The last image listed is the highest resolution
-        # ["source"] The URL of the image
-        return self.movie_json_path.parsed_cached()["data"][0]["images"]["thumbnail"][0][-1]["source"]
 
     def download_all(self, minimum_timestamp: Optional[datetime] = None) -> None:
         if self.outdated_files(minimum_timestamp):
@@ -87,19 +69,19 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
                 stealth_sync(page)
 
                 page.on("response", self.save_playwright_files)
-                self.download_movie_json(page, minimum_timestamp)
+                self.download_movie(page, minimum_timestamp)
 
                 page.on("response", self.save_playwright_images)
                 self.download_movie_image(page)
-                self.download_episode(page)
+                self.download_episode_image(page)
 
                 page.close()
 
-    def download_movie_json(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
+    def download_movie(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
         """Download all of the movie files that are outdated or do not exist"""
         if self.outdated_movie_json(minimum_timestamp):
-            logging.getLogger(f"{self.logger_identifier()}.Scraping").info(self.movie_url)
-            page.goto(self.movie_url, wait_until="networkidle")
+            logging.getLogger(f"{self.logger_identifier()}.Scraping").info(self.show_url)
+            page.goto(self.show_url, wait_until="networkidle")
 
             files = [self.movie_json_path, self.movie_extra_json_path]
             self.playwright_wait_for_files(page, files, minimum_timestamp)
@@ -107,11 +89,13 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
     def download_movie_image(self, page: Page) -> None:
         """Download the movie image if it is outdated or do not exist, this is a seperate function from downloading the
         movie because it is easier to download all of the images after downloading all of the JSON files"""
-        self.playwright_download_image(page, self.movie_image_url(), "Movie")
+        url = self.strict_image_url(self.movie_extra_json_path, "poster_wide")
+        self.playwright_download_image(page, url, "Movie")
 
-    def download_episode(self, page: Page) -> None:
+    def download_episode_image(self, page: Page) -> None:
         """Download all of the episode files that are outdated or do not exist"""
-        self.playwright_download_image(page, self.episode_image_url(), "Episode")
+        url = self.strict_image_url(self.movie_json_path, "thumbnail")
+        self.playwright_download_image(page, url, "Episode")
 
     def save_playwright_files(self, response: Response) -> None:
         """Save specific files that are requested by playwright"""
@@ -131,18 +115,7 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
-        if self.show.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
-            parrsed_movie = self.movie_json_path.parsed_cached()["data"][0]
-
-            self.show.name = parrsed_movie["title"]
-            self.show.description = parrsed_movie["description"]
-            self.show.url = self.movie_url
-            image_url = self.movie_image_url()
-            self.set_image(self.show, image_url)
-            self.show.favicon_url = self.DOMAIN + "/favicons/favicon-32x32.png"
-            self.show.deleted = False
-            self.show.media_type = "Movie"
-            self.show.add_timestamps_and_save(self.movie_json_path)
+        self.import_show_real(self.movie_extra_json_path, "Movie", minimum_info_timestamp, minimum_modified_timestamp)
 
     def import_seasons(
         self,
@@ -186,7 +159,8 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
             strp = "%Y-%m-%dT%H:%M:%S%z"
             episode.air_date = datetime.strptime(parsed_movie_extra["premium_available_date"], strp)
             episode.release_date = datetime.strptime(parsed_movie_extra["premium_available_date"], strp)
-            self.set_image(episode, self.episode_image_url())
+            image_url = self.strict_image_url(self.movie_json_path, "thumbnail")
+            self.set_image(episode, image_url)
 
             # No seperate file for episodes so just use the season file
             episode.deleted = False

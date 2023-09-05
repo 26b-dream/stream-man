@@ -31,31 +31,24 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
         self.show_seasons_json_path = JSONFile(self.files_dir(), "show_seasons.json")
 
     def outdated_files(self, minimum_timestamp: Optional[datetime] = None) -> bool:
-        """Check if any of the files are missing or outdated"""
-        # This seems like a silly way of checking multiple files, but it allows for every file to be checked even if a
-        # file is found to be missing, this is useful for logging purposes. A single pipe could be used instead, but
-        # this is easier to read and understand.
-        output = self.outdated_show_files(minimum_timestamp)
-        output = self.outdated_seasons_files(minimum_timestamp) or output
-        output = self.outdated_episode_images() or output
-        return output
-
-    def outdated_show_files(self, minimum_timestamp: Optional[datetime] = None) -> bool:
-        """Check if any of the show files are missing or outdated"""
-        output = self.outdated_show_json(minimum_timestamp)
-        output = self.outdated_show_image() or output
-        return output
+        return (
+            self.outdated_show_json(minimum_timestamp)
+            or self.outdated_seasons_files(minimum_timestamp)
+            or self.outdated_show_image()
+            or self.outdated_episode_images()
+        )
 
     def outdated_show_json(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if any of the show JSON files are missing or outdated"""
-        output = self.check_if_outdated(self.show_json_path, "Show JSON", minimum_timestamp)
-        output = self.check_if_outdated(self.show_seasons_json_path, "Show JSON", minimum_timestamp) or output
-        return output
+        # Why does black have to make this so ugly?
+        return self.check_if_outdated(self.show_json_path, "Show JSON", minimum_timestamp) or self.check_if_outdated(
+            self.show_seasons_json_path, "Show Seasons JSON", minimum_timestamp
+        )
 
     def outdated_show_image(self) -> bool:
-        """Check if any of the show image are missing or outdated"""
+        """Check if a specific show image file is missing or outdated"""
         if self.show_json_path.exists():
-            image_url = self.show_json_path.parsed()["data"][0]["images"]["poster_wide"][0][-1]["source"]
+            image_url = self.strict_image_url(self.show_json_path, "poster_wide")
             image_path = self.image_path(image_url)
             return self.check_if_outdated(image_path, "Show image")
 
@@ -65,15 +58,13 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
         """Check if any of the season files are missing or outdated"""
         # If files are missing but they are not the specific files that are being checked return False and assume
         # checking the parent files will cover the child files
-        if not self.show_seasons_json_path.exists():
-            return False
-
-        # This seems like a silly way of checking multiple files, but it allows for every file to be checked even if a
-        # file is found to be missing, this is useful for logging purposes.
         output = False
-        seasons = self.show_seasons_json_path.parsed()["data"]
-        for season in seasons:
-            output = self.outdated_season_files(season["id"], minimum_timestamp) or output
+        if self.show_seasons_json_path.exists():
+            # This seems like a silly way of checking multiple files, but it allows for every file to be checked even if a
+            # file is found to be missing, this is useful for logging purposes.
+            seasons = self.show_seasons_json_path.parsed_cached()["data"]
+            for season in seasons:
+                output = self.outdated_season_files(season["id"], minimum_timestamp) or output
 
         return output
 
@@ -89,21 +80,33 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
 
         # If files are missing and they are not the specific files that are being checked return False and assume
         # checking the parent files will cover the child files
-        if not self.show_seasons_json_path.exists():
-            return False
+        if self.show_seasons_json_path.exists():
+            for season in self.show_seasons_json_path.parsed_cached()["data"]:
+                season_json_path = self.season_json_path(season["id"])
 
-        for season in self.show_seasons_json_path.parsed()["data"]:
-            season_json_path = self.season_json_path(season["id"])
-
-            if season_json_path.exists():
-                season_json_parsed = self.season_json_path(season["id"]).parsed()
-                for episode in season_json_parsed["data"]:
-                    if episode_images := episode.get("images"):
-                        image_url = episode_images["thumbnail"][0][-1]["source"]
-                        image_path = self.image_path(image_url)
-                        output = self.check_if_outdated(image_path, "Episode image") or output
+                if season_json_path.exists():
+                    season_json_parsed = self.season_json_path(season["id"]).parsed_cached()
+                    for i, _episode in enumerate(season_json_parsed["data"]):
+                        if image_url := self.image_url(season_json_path, "thumbnail", i):
+                            image_path = self.image_path(image_url)
+                            output = self.check_if_outdated(image_path, "Episode image") or output
 
         return output
+
+    def save_playwright_files(self, response: Response) -> None:
+        """Save specific files that are requested by playwright"""
+        # Example URL: https://www.crunchyroll.com/content/v2/cms/series/GEXH3W4JP?locale=en-US
+        if f"series/{self.show_id}?" in response.url:
+            self.playwright_save_json_response(response, self.show_json_path)
+
+        # Example URL: https://www.crunchyroll.com/content/v2/cms/series/GEXH3W4JP/seasons?locale=en-US
+        elif f"series/{self.show_id}/seasons?" in response.url:
+            self.playwright_save_json_response(response, self.show_seasons_json_path)
+
+        # Example URL: https://www.crunchyroll.com/content/v2/cms/seasons/GYQ4MQ496/episodes?locale=en-US
+        elif "episodes?" in response.url:
+            season_id = re.strict_search(r"seasons/(.*)/episodes?", response.url).group(1)
+            self.playwright_save_json_response(response, self.season_json_path(season_id))
 
     def download_all(self, minimum_timestamp: Optional[datetime] = None) -> None:
         """Download all of the files that are outdated or do not exist"""
@@ -114,14 +117,15 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
                 browser = self.playwright_browser(playwright)
                 page = browser.new_page()
                 stealth_sync(page)
-                page.on("response", self.save_playwright_files)
 
+                page.on("response", self.save_playwright_files)
                 self.download_show(page, minimum_timestamp)
                 self.download_seasons(page, minimum_timestamp)
-                # Download images after show and season because they are all just direct links
+
                 page.on("response", self.save_playwright_images)
                 self.download_show_image(page)
-                self.download_episodes(page)
+                self.download_episode_images(page)
+
                 page.close()
 
     def download_show(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
@@ -137,16 +141,14 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
     def download_show_image(self, page: Page) -> None:
         """Download the show image if it is outdated or do not exist, this is a seperate function from downloading the
         show because it is easier to download all of the images after downloading all of the JSON files"""
-        parsed_show = self.show_json_path.parsed_cached()["data"][0]
-        image_url = parsed_show["images"]["poster_wide"][0][-1]["source"]
+        image_url = self.strict_image_url(self.show_json_path, "poster_wide")
         self.playwright_download_image(page, image_url, "show")
 
     def download_seasons(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
         """Download all of the season files that are outdated or do not exist"""
-        show_seasons_json_parsed = self.show_seasons_json_path.parsed()
+        show_seasons_json_parsed = self.show_seasons_json_path.parsed_cached()
         logger = logging.getLogger(f"{self.logger_identifier()}.Scraping")
         for season in show_seasons_json_parsed["data"]:
-            # If all of the season files are up to date nothing needs to be done
             if self.outdated_season_files(season["id"], minimum_timestamp):
                 # All season pages have to be downloaded from the show page so open the show page
                 # Only do this one time, all later pages can reuse existing page
@@ -169,32 +171,16 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
 
                 self.playwright_wait_for_files(page, self.season_json_path(season["id"]), minimum_timestamp)
 
-    def download_episodes(self, page: Page) -> None:
+    def download_episode_images(self, page: Page) -> None:
         """Download all of the episode files that are outdated or do not exist"""
-        show_seasons_json_parsed = self.show_seasons_json_path.parsed()["data"]
+        show_seasons_json_parsed = self.show_seasons_json_path.parsed_cached()["data"]
 
         for season in show_seasons_json_parsed:
-            season_json_parsed = self.season_json_path(season["id"]).parsed()
+            season_json_parsed = self.season_json_path(season["id"]).parsed_cached()
 
-            for _, episode in enumerate(season_json_parsed["data"]):
-                if episode_images := episode.get("images"):
-                    image_url = episode_images["thumbnail"][0][-1]["source"]
+            for i, _episode in enumerate(season_json_parsed["data"]):
+                if image_url := self.image_url(self.season_json_path(season["id"]), "thumbnail", i):
                     self.playwright_download_image(page, image_url, "episode")
-
-    def save_playwright_files(self, response: Response) -> None:
-        """Save specific files that are requested by playwright"""
-        # Example URL: https://www.crunchyroll.com/content/v2/cms/series/GEXH3W4JP?locale=en-US
-        if f"series/{self.show_id}?" in response.url:
-            self.playwright_save_json_response(response, self.show_json_path)
-
-        # Example URL: https://www.crunchyroll.com/content/v2/cms/series/GEXH3W4JP/seasons?locale=en-US
-        elif f"series/{self.show_id}/seasons?" in response.url:
-            self.playwright_save_json_response(response, self.show_seasons_json_path)
-
-        # Example URL: https://www.crunchyroll.com/content/v2/cms/seasons/GYQ4MQ496/episodes?locale=en-US
-        elif "episodes?" in response.url:
-            season_id = re.strict_search(r"seasons/(.*)/episodes?", response.url).group(1)
-            self.playwright_save_json_response(response, self.season_json_path(season_id))
 
     def season_button(self, page: Page, season: dict[str, str]) -> ElementHandle:
         """Find the button that changes the season shown on the show page"""
@@ -211,23 +197,9 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
         minimum_info_timestamp: Optional[datetime] = None,
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
-        """Import the show information into the database"""
-        if self.show.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
-            parsed_show = self.show_json_path.parsed_cached()["data"][0]
-
-            self.show.name = parsed_show["title"]
-            self.show.description = parsed_show["description"]
-            self.show.url = self.show_url
-            # poster_wide is an image with a 16x9 ratio (poster_tall is 6x9)
-            # [0][-1] the last image listed is the highest resolution
-            image_url = parsed_show["images"]["poster_wide"][0][-1]["source"]
-            self.set_image(self.show, image_url)
-            self.show.favicon_url = self.DOMAIN + "/favicons/favicon-32x32.png"
-            # I don't see anything on Cruncyhroll that shows the difference between a TV Series, ONA, or OVA, so just list
-            # this as a series which is a generic catch all term
-            self.show.media_type = "Series"
-            self.show.deleted = False
-            self.show.add_timestamps_and_save(self.show_json_path)
+        # I don't see anything on Cruncyhroll that shows the difference between a TV Series, ONA, or OVA, so just list
+        # this as a series which is a generic catch all term
+        self.import_show_real(self.show_json_path, "Series", minimum_info_timestamp, minimum_modified_timestamp)
 
     def import_seasons(
         self,
@@ -279,11 +251,9 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
                     episode_info.release_date = datetime.strptime(episode["premium_available_date"], strp).astimezone()
                     # Every now and then a show just won't have thumbnails and the thumbnail will be added a few weeks
                     # later, see: https://beta.crunchyroll.com/series/G79H23VD4/im-kodama-kawashiri
-                    if episode_images := episode.get("images"):
-                        # [0][-1] the last image listed is the highest resolution
-                        image_url = episode_images["thumbnail"][0][-1]["source"]
+                    if image_url := self.image_url(self.season_json_path(season["id"]), "thumbnail", i):
                         self.set_image(episode_info, image_url)
 
-                    # No seperate file for episodes so just use the season file because it has episode information
                     episode_info.deleted = False
+                    # No seperate file for episodes so just use the season file because it has episode information
                     episode_info.add_timestamps_and_save(season_info.info_timestamp)
