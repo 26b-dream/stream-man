@@ -66,46 +66,40 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
 
         raise ValueError("Unable to get episode_image_url")
 
-    def outdated_files(self, minimum_timestamp: Optional[datetime] = None) -> bool:
+    def any_file_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if any of the files are missing or outdated"""
-        return (
-            self.outdated_show_files(minimum_timestamp)
-            or self.outdated_seasons_files(minimum_timestamp)
-            or self.outdated_episodes_files()
-        )
+        output = self.show_json_outdated(minimum_timestamp)
+        output = self.any_season_file_outdated(minimum_timestamp) or output
+        output = self.any_episode_image_missing() or output
+        output = self.show_image_missing() or output
+        return output
 
-    def outdated_show_files(self, minimum_timestamp: Optional[datetime] = None) -> bool:
-        """Check if any of the show files are missing or outdated"""
-        return self.outdated_show_json(minimum_timestamp) or self.outdated_show_image()
-
-    def outdated_show_json(self, minimum_timestamp: Optional[datetime] = None) -> bool:
+    def show_json_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if the show json file is missing or outdated"""
         return self.check_if_outdated(self.show_json_path, "Show JSON", minimum_timestamp)
 
-    def outdated_show_image(self) -> bool:
-        """Check if any of the show image are missing or outdated"""
+    def show_image_missing(self) -> bool:
+        """Check if the show image is missing"""
         if self.show_json_path.exists():
             show_image_path = self.image_path(self.show_image_url())
             return self.check_if_outdated(show_image_path, "Show Image")
         return False
 
-    def outdated_seasons_files(self, minimum_timestamp: Optional[datetime] = None) -> bool:
-        """Check if any of the season files are missing or outdated"""
+    def any_season_file_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
+        """Check if any of the season JSON files are missing or outdated"""
         output = False
         if self.show_json_path.exists():
             for season_number in self.season_numbers():
-                output = self.outdated_season_files(season_number, minimum_timestamp) or output
+                output = self.season_json_outdated(season_number, minimum_timestamp) or output
 
         return output
 
-    def outdated_season_files(self, season_number: str, minimum_timestamp: Optional[datetime] = None) -> bool:
-        """Check if any of the season files for a specific season are missing or outdated, having this as a seperate
-        function makes it easier to check what seasons need to be updated"""
+    def season_json_outdated(self, season_number: str, minimum_timestamp: Optional[datetime] = None) -> bool:
+        """Check if the season JSON file for a specific season is missing or outdated"""
         return self.check_if_outdated(self.season_json_path(season_number), "Season JSON", minimum_timestamp)
 
-    def outdated_episodes_files(self) -> bool:
-        """Check if any of the image files are missing or outdated"""
-        output = False
+    def episode_image_urls(self) -> list[str]:
+        output: list[str] = []
         if self.show_json_path.exists():
             if season_numbers := self.season_numbers():
                 for season_number in season_numbers:
@@ -113,11 +107,20 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
                         for parsed_episode in self.season_episodes(season_number):
                             image_id = parsed_episode["relationships"]["images"]["data"][0]["id"]
                             image_url = self.episode_image_url(image_id, season_number)
-                            image_path = self.image_path(image_url)
-                            output = self.check_if_outdated(image_path, "Episode Image") or output
+                            output.append(image_url)
+        return output
+
+    def any_episode_image_missing(self) -> bool:
+        """Check if any of the episode images are missing"""
+        output = False
+        for image_url in self.episode_image_urls():
+            image_path = self.image_path(image_url)
+            output = self.check_if_outdated(image_path, "Episode Image")
+
         return output
 
     def save_playwright_files(self, response: Response) -> None:
+        """Save specific files from the response recieved by playwright"""
         # This is the JSON file that is recieved when loading up the show page
         if self.partial_show_json_url in response.url:
             parsed_json = response.json()
@@ -146,62 +149,60 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
             self.playwright_save_json_response(response, self.season_json_path(season_number))
 
     def download_all(self, minimum_timestamp: Optional[datetime] = None) -> None:
-        """Download all of the files that are outdated or do not exist"""
-        if self.outdated_files(minimum_timestamp):
+        if self.any_file_outdated(minimum_timestamp):
             with sync_playwright() as playwright:
                 page = self.playwright_browser(playwright).new_page()
                 stealth_sync(page)
+
                 page.on("response", self.save_playwright_files)
                 self.download_show_json(page, minimum_timestamp)
                 self.download_seasons(page, minimum_timestamp)
-                page.on("response", self.save_playwright_images)
+
+                page.on("response", self.playwright_save_images)
                 self.download_show_image(page)
-                self.download_episodes(page)
+                self.download_episode_images(page)
+
                 page.close()
 
     def download_show_json(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
-        """Download all of the show files that are outdated or do not exist"""
-        if self.outdated_show_json(minimum_timestamp):
-            logging.getLogger(f"{self.logger_identifier()}.Scraping").info(self.show_url)
-            page.goto(self.show_url, wait_until="networkidle")
+        """Download all of the show files that are missing or outdated"""
+        if self.show_json_outdated(minimum_timestamp):
+            self.logged_goto(page, self.show_url, wait_until="networkidle")
             self.playwright_wait_for_files(page, self.show_json_path, minimum_timestamp)
 
-    def download_show_image(self, page: Page) -> None:
-        """Download the show image if it is outdated or do not exist, this is a seperate function from downloading the
-        show because it is easier to download all of the images after downloading all of the JSON files"""
-        self.playwright_download_image(page, self.show_image_url(), "show")
-
     def download_seasons(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
-        """Download all of the season files that are outdated or do not exist"""
+        """Download all of the season files that are missing or outdated"""
         logger = logging.getLogger(f"{self.logger_identifier()}.Scraping")
         for season in self.season_numbers():
             # If all of the season files are up to date nothing needs to be done
-            if self.outdated_season_files(season, minimum_timestamp):
+            if self.season_json_outdated(season, minimum_timestamp):
                 # All season pages have to be downloaded from the show page so open the show page
                 # Only do this one time, all later pages can reuse existing page
                 if self.show_url not in page.url:
-                    logger.info(self.show_url)
-                    page.goto(self.show_url, wait_until="networkidle")
+                    self.logged_goto(page, self.show_url, wait_until="networkidle")
 
                 if page.query_selector("div[data-testid='season-dropdown']"):
                     logger.info("Season %s", season)
                     # Open season selector
-                    page.locator("div[data-testid='season-dropdown']").click()
+                    self.logged_click(page.locator("div[data-testid='season-dropdown']"), "Season selector")
 
                     # Sleep for 5 seconds to avoid being banned
                     page.wait_for_timeout(5000)
 
                     # Click season
-                    page.locator(f"span[data-testid='season-{season}']").click()
+                    season_button = page.locator(f"span[data-testid='season-{season}']")
+                    self.logged_click(season_button, f"Season button {season_button.inner_text}")
 
                     self.playwright_wait_for_files(page, self.season_json_path(season), minimum_timestamp)
 
-    def download_episodes(self, page: Page) -> None:
-        for season_number in self.season_numbers():
-            for episode_parsed in self.season_episodes(season_number):
-                image_id = episode_parsed["relationships"]["images"]["data"][0]["id"]
-                image_url = self.episode_image_url(image_id, season_number)
-                self.playwright_download_image(page, image_url, "episode")
+    def download_show_image(self, page: Page) -> None:
+        """Download the show image if it is missing or outdated"""
+        self.playwright_download_image(page, self.show_image_url(), "show")
+
+    def download_episode_images(self, page: Page) -> None:
+        """Download all episode images that are missing or outdated"""
+        for image_url in self.episode_image_urls():
+            self.playwright_download_image(page, image_url, "episode")
 
     def import_show(
         self,

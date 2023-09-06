@@ -137,7 +137,13 @@ class ScraperShowShared(ABC, ScraperShared):
         self, file_path: ExtendedPath, file_type: str, minimum_timestamp: Optional[datetime] = None
     ) -> bool:
         """Check if a specific image is missing or outdated"""
-        if file_path.outdated(minimum_timestamp):
+        # This is basically a re-implementation of ExtendedPath.outdated but with added logging
+        if not file_path.exists():
+            logger = logging.getLogger(f"{self.logger_identifier()}:Missing:{file_type}")
+            logger.info(self.pretty_file_path(file_path))
+            return True
+
+        if minimum_timestamp and file_path.aware_mtime() < minimum_timestamp.astimezone():
             logger = logging.getLogger(f"{self.logger_identifier()}:Outdated:{file_type}")
             logger.info(self.pretty_file_path(file_path))
             return True
@@ -204,7 +210,7 @@ class ScraperShowShared(ABC, ScraperShared):
         self,
         minimum_timestamp: Optional[datetime] = None,
     ) -> None:
-        """Downloads all of the information for a show"""
+        """Download all of the files that are missing or outdated"""
 
     @transaction.atomic
     def import_all(
@@ -298,7 +304,7 @@ class ScraperShowShared(ABC, ScraperShared):
             image_path.parent.mkdir(parents=True, exist_ok=True)
             urllib.request.urlretrieve(image_url, image_path)
 
-    def save_playwright_images(self, response: Response) -> None:
+    def playwright_save_images(self, response: Response) -> None:
         """Save every image file that is requested by playwright"""
 
         self.image_path(response.url).write(response.body())

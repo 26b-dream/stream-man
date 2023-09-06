@@ -42,6 +42,7 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
         self.show_url = f"{self.DOMAIN}/title/{self.show_id}"
         self.show_html_path = HTMLFile(self.files_dir(), "show.html")
         self.seasons_json_path = JSONFile(self.files_dir(), "seasons.json")
+        self.falcor_cache_cached_value = None
 
         credentials = Credentials.load_credentials()
         self.emaiil = credentials["Netflix"]["email"]
@@ -50,41 +51,41 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
         self.name = credentials["Netflix"]["name"]
 
     def show_img_url(self):
-        selector = self.show_html_path.parsed().strict_select_one("div[class^='storyArt'] img:first-of-type")
-        full_url = selector.attrs["src"]
-        return full_url.split("?")[0]
+        return self.falcor_cache()["videos"][self.show_id]["jawSummary"]["value"]["backgroundImage"]["url"]
 
-    def outdated_files(self, minimum_timestamp: Optional[datetime] = None) -> bool:
-        """Check if any of the files are missing or outdated"""
-        output = self.outdated_show_files(minimum_timestamp)
-        output = self.outdated_season_files(minimum_timestamp) or output
-        output = self.outdated_show_image() or output
-        output = self.outdated_episode_images() or output
+    def episode_image_urls(self) -> list[str]:
+        """Returns a list of all of the episode image urls"""
+        output: list[str] = []
+        if self.seasons_json_path.exists():
+            for season_id in self.seasons_json_path.parsed_cached()["jsonGraph"]["seasons"]:
+                parsed_season_path = self.season_json_path(season_id).parsed_cached()
+                for _episode_id, parsed_episode in parsed_season_path["jsonGraph"]["videos"].items():
+                    if parsed_episode.get("interestingMoment"):
+                        output.append(self.episode_image_url(parsed_episode))
+
         return output
 
-    def outdated_show_files(self, minimum_timestamp: Optional[datetime] = None) -> bool:
+    def episode_image_url(self, parsed_episode: dict[str, Any]) -> str:
+        last_key = list(parsed_episode["interestingMoment"].keys())[-1]
+        last_key_2 = list(parsed_episode["interestingMoment"][last_key].keys())[-1]
+        full_image_url = parsed_episode["interestingMoment"][last_key][last_key_2]["value"]["url"]
+        return full_image_url.split("?")[0]
+
+    def any_file_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
+        output = self.show_files_outdated(minimum_timestamp)
+        output = self.season_files_outdated(minimum_timestamp) or output
+        output = self.show_image_missing() or output
+        output = self.episode_images_missing() or output
+        return output
+
+    def show_files_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if any of the show files are missing or outdated"""
-        output = self.outdated_show_json(minimum_timestamp)
-        output = self.outdated_show_html(minimum_timestamp)
-        output = self.outdated_seasons_json(minimum_timestamp)
+        output = self.check_if_outdated(self.show_json_path, "Show JSON", minimum_timestamp)
+        output = self.check_if_outdated(self.show_html_path, "Show HTML", minimum_timestamp) or output
+        output = self.check_if_outdated(self.seasons_json_path, "Show JSON", minimum_timestamp) or output
         return output
 
-    def outdated_show_json(self, minimum_timestamp: Optional[datetime] = None) -> bool:
-        """Check if the show json file is missing or outdated"""
-        return self.check_if_outdated(self.show_json_path, "Show JSON", minimum_timestamp)
-
-    def outdated_show_html(self, minimum_timestamp: Optional[datetime] = None) -> bool:
-        """Check if the show json file is missing or outdated"""
-        return self.check_if_outdated(self.show_html_path, "Show HTML", minimum_timestamp)
-
-    def outdated_seasons_json(self, minimum_timestamp: Optional[datetime] = None) -> bool:
-        """Check if the show json file is missing or outdated"""
-        if self.show_html_path.exists() and self.is_movie():
-            return False
-
-        return self.check_if_outdated(self.seasons_json_path, "Show JSON", minimum_timestamp)
-
-    def outdated_season_files(self, minimum_timestamp: Optional[datetime] = None) -> bool:
+    def season_files_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if any of the season files are missing or outdated"""
         if self.show_html_path.exists() and self.is_movie():
             return False
@@ -95,23 +96,23 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
             output = True
 
         if self.show_json_path.exists():
-            for season_id in self.seasons_json_path.parsed()["jsonGraph"]["seasons"]:
+            for season_id in self.seasons_json_path.parsed_cached()["jsonGraph"]["seasons"]:
                 season_file = self.season_json_path(season_id)
                 if self.check_if_outdated(season_file, f"Seasons {season_id} JSON", minimum_timestamp):
                     output = True
 
         return output
 
-    def outdated_show_image(self) -> bool:
-        """Check if any of the show image are missing or outdated"""
+    def show_image_missing(self) -> bool:
+        """Check if the show image is missing"""
         if self.show_html_path.exists():
             image_path = self.image_path(self.show_img_url())
             return self.check_if_outdated(image_path, "Show image")
 
         return False
 
-    def outdated_episode_images(self) -> bool:
-        """Check if any of the show image are missing or outdated"""
+    def episode_images_missing(self) -> bool:
+        """Check if any of the episode images are missing"""
         output = False
         if self.seasons_json_path.exists():
             for image_url in self.episode_image_urls():
@@ -121,6 +122,7 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
         return output
 
     def save_playwright_files(self, response: Response) -> None:
+        """Save specific files from the response recieved by playwright"""
         # All information from Netflix is under this url
         if "pathEvaluator?" in response.url:
             parsed_json = response.json()
@@ -145,8 +147,7 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
                 self.playwright_save_json_response(response, self.season_json_path(season_id))
 
     def download_all(self, minimum_timestamp: Optional[datetime] = None) -> None:
-        """Download all of the files that are outdated or do not exist"""
-        if self.outdated_files(minimum_timestamp):
+        if self.any_file_outdated(minimum_timestamp):
             logging.getLogger(self.logger_identifier()).info("Initializing Playwright")
             with sync_playwright() as playwright:
                 page = self.playwright_browser(playwright).new_page()
@@ -156,41 +157,48 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
                 self.download_show(page, minimum_timestamp)
                 self.download_seasons(page, minimum_timestamp)
 
-                page.on("response", self.save_playwright_images)
+                page.on("response", self.playwright_save_images)
                 self.download_show_image(page)
                 self.download_episode_images(page)
 
                 page.close()
 
     def download_show(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
-        if self.outdated_show_files(minimum_timestamp):
-            logging.getLogger(f"{self.logger_identifier()}.Scraping").info(self.show_url)
+        if self.show_files_outdated(minimum_timestamp):
             self.go_to_page_logged_in(page, self.show_url)
             page.wait_for_load_state("networkidle")
 
             self.playwright_save_html_response(page, self.show_html_path)
+            self.falcor_cache_cached_value = None
 
     def download_seasons(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
-        if self.outdated_season_files(minimum_timestamp):
+        if self.season_files_outdated(minimum_timestamp):
             logging.getLogger(f"{self.logger_identifier()}.Scraping").info("All Seasons")
-            # Only go the the URL if it is not already on the page
             if page.url != self.show_url:
                 self.go_to_page_logged_in(page, self.show_url)
                 page.wait_for_load_state("networkidle")
 
             # If there is a list of seasons open up the season selector
-            season_selector = page.query_selector("button[data-uia='dropdown-toggle']")
-            if season_selector:
-                season_selector.click()
+            if season_selector := page.query_selector("button[data-uia='dropdown-toggle']"):
+                self.logged_click(season_selector, "Season selector")
 
                 # Click the button to show all of the seasons at once on the page
-                li_elements = page.query_selector_all('li[data-uia="dropdown-menu-item"]')
-                if li_elements:
-                    li_elements[-1].click()
+                if li_elements := page.query_selector_all('li[data-uia="dropdown-menu-item"]'):
+                    self.logged_click(li_elements[-1], "Show all seasons")
 
-                for season_id in self.seasons_json_path.parsed()["jsonGraph"]["seasons"]:
-                    while self.season_json_path(season_id).outdated(minimum_timestamp):
-                        page.wait_for_timeout(1000)
+                # Wait for all files to exist
+                files: list[JSONFile] = []
+                for season_id in self.seasons_json_path.parsed_cached()["jsonGraph"]["seasons"]:
+                    files.append(self.season_json_path(season_id))
+                self.playwright_wait_for_files(page, files, minimum_timestamp)
+
+    def download_show_image(self, page: Page) -> None:
+        """Download the show image if it does not exist"""
+        self.playwright_download_image(page, self.show_img_url(), "show")
+
+    def download_episode_images(self, page: Page) -> None:
+        for image_url in self.episode_image_urls():
+            self.playwright_download_image(page, image_url, "show")
 
     def go_to_page_logged_in(
         self,
@@ -237,46 +245,20 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
             if season.get("episodes"):
                 return season_id
 
-    def download_show_image(self, page: Page) -> None:
-        """Download the show image if it is outdated or do not exist, this is a seperate function from downloading the
-        show because it is easier to download all of the images after downloading all of the JSON files"""
-        self.playwright_download_image(page, self.show_img_url(), "show")
-
-    def download_episode_images(self, page: Page) -> None:
-        for image_url in self.episode_image_urls():
-            self.playwright_download_image(page, image_url, "show")
-
-    def episode_image_urls(self) -> list[str]:
-        """Returns a list of all of the episode image urls"""
-        output: list[str] = []
-        if self.seasons_json_path.exists():
-            for season_id in self.seasons_json_path.parsed()["jsonGraph"]["seasons"]:
-                parsed_season_path = self.season_json_path(season_id).parsed()
-                for _episode_id, parsed_episode in parsed_season_path["jsonGraph"]["videos"].items():
-                    if parsed_episode.get("interestingMoment"):
-                        output.append(self.episode_image_url(parsed_episode))
-
-        return output
-
-    def episode_image_url(self, parsed_episode: dict[str, Any]) -> str:
-        last_key = list(parsed_episode["interestingMoment"].keys())[-1]
-        last_key_2 = list(parsed_episode["interestingMoment"][last_key].keys())[-1]
-        full_image_url = parsed_episode["interestingMoment"][last_key][last_key_2]["value"]["url"]
-        return full_image_url.split("?")[0]
-
     def is_movie(self) -> bool:
         """Check if the media is a movie or not"""
-        parsed_show_html = self.show_html_path.parsed()
-        media_type_string = parsed_show_html.strict_select("span[class='previewModal--tags-label']")[-1].text
-        return "movie" in media_type_string
+        return "movie" in self.falcor_cache()["videos"][self.show_id]["jawSummary"]["value"]["type"]
 
-    def falcor_cache(self) -> dict[str, Any]:
-        string = self.show_html_path.read_text("utf-8")
-        string = string.split("netflix.falcorCache =")[-1]
-        string = string.split(";</script>")[0]
-        string = string.replace("\\x", "%")
-        string = urllib.parse.unquote(string)
-        return json.loads(string.encode())
+    # TODO: Cahce this so JSOn doesn't have to be parsed so many times
+    def falcor_cache(self, reload: bool = False) -> dict[str, Any]:
+        if not self.falcor_cache_cached_value or reload:
+            string = self.show_html_path.read_text("utf-8")
+            string = string.split("netflix.falcorCache =")[-1]
+            string = string.split(";</script>")[0]
+            string = string.replace("\\x", "%")
+            string = urllib.parse.unquote(string)
+            self.falcor_cache_cached_value = json.loads(string.encode())
+        return self.falcor_cache_cached_value
 
     def import_show(
         self,
@@ -284,12 +266,12 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
         minimum_modified_timestamp: Optional[datetime] = None,
     ) -> None:
         if self.show.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
-            parsed_show_html = self.show_html_path.parsed()
+            parsed_show_html = self.show_html_path.parsed_cached()
             falcor_cache = self.falcor_cache()
             show_thing = falcor_cache["videos"][self.show_id]
-            self.show.name = show_thing["title"]["value"]
-            self.show.description = show_thing["synopsis"]["value"]
-            self.show.media_type = show_thing["summary"]["value"]["type"].title()
+            self.show.name = show_thing["jawSummary"]["value"]["title"]
+            self.show.description = show_thing["jawSummary"]["value"]["synopsis"]
+            self.show.media_type = show_thing["jawSummary"]["value"]["type"].title()
             img_url = show_thing["jawSummary"]["value"]["backgroundImage"]["url"].split("?")[0]
             self.set_image(self.show, img_url)
             self.show.url = self.show_url
@@ -311,7 +293,7 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
                 season.deleted = False
                 season.add_timestamps_and_save(self.show_json_path)
         else:
-            season_items = self.seasons_json_path.parsed()["jsonGraph"]["seasons"].items()
+            season_items = self.seasons_json_path.parsed_cached()["jsonGraph"]["seasons"].items()
             for i, (season_id, season_info) in enumerate(season_items):
                 season = Season().get_or_new(season_id=season_id, show=self.show)[0]
 
@@ -351,9 +333,9 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
                 self.set_image(episode, self.show.image.url)
                 episode.add_timestamps_and_save(season.info_timestamp)
         else:
-            for season_id in self.seasons_json_path.parsed()["jsonGraph"]["seasons"]:
+            for season_id in self.seasons_json_path.parsed_cached()["jsonGraph"]["seasons"]:
                 season = Season().get_or_new(season_id=season_id, show=self.show)[0]
-                parsed_season_path = self.season_json_path(season_id).parsed()
+                parsed_season_path = self.season_json_path(season_id).parsed_cached()
                 for i, (episode_id, parsed_episode) in enumerate(parsed_season_path["jsonGraph"]["videos"].items()):
                     # Some junk entries
                     if not parsed_episode.get("title"):
