@@ -3,22 +3,31 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from functools import cache
 from typing import TYPE_CHECKING
 
 import common.extended_re as re
 from common.abstract_scraper import AbstractScraperClass
 from common.base_scraper import ScraperShowShared
+from extended_path import ExtendedPath
 from json_file import JSONFile
 from media.models import Episode, Season
 from playwright.sync_api import sync_playwright
 from playwright_stealth import stealth_sync  # pyright: ignore [reportMissingTypeStubs]
 
 if TYPE_CHECKING:
-    from typing import Optional
+    from typing import Any, Optional
 
     from playwright.sync_api._generated import Page, Response
 
 
+@cache
+def season_json_path(files_dir: ExtendedPath, season_number: int, page: int) -> JSONFile:
+    """Path for the JSON file that lists all of the episodes for a specific season"""
+    return JSONFile(files_dir, "season", f"Season {season_number}", f"Page {page}.json")
+
+
+# TODO: Latest season does not fully download
 class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
     WEBSITE = "America's Test Kitchen"
     DOMAIN = "https://www.americastestkitchen.com"
@@ -27,12 +36,12 @@ class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
     # Example show URLs
     #   https://www.americastestkitchen.com/cookscountry/episodes
     #   https://www.americastestkitchen.com/episodes
-    URL_REGEX = re.compile(rf"{re.escape(DOMAIN)}/(?P<show_id>.*?)(?:/|$)")
+    URL_REGEX = re.compile(rf"^{re.escape(DOMAIN)}/(?P<show_id>.*?)(?:/|$)")
 
     def __init__(self, show_url: str) -> None:
         super().__init__(show_url)
 
-        # THe main America's Test Kitchen show doesn't match the format used by their other shows. If this isn't the
+        # The main America's Test Kitchen show doesn't match the format used by their other shows. If this isn't the
         # main America's Test Kitchen show /episodes needs to be appended to the URL
         self.show_url = f"{self.DOMAIN}/{self.show_id}"
         if self.show_id != "episodes":
@@ -40,45 +49,44 @@ class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
 
         self.seasons_json_path = JSONFile(self.files_dir(), "seasons.json")
 
-    def episode_image_urls(self) -> list[str]:
-        """Get a list of all of the episode image URLs"""
-        output: list[str] = []
+    def episode_image_tuples(self) -> list[tuple[str, ExtendedPath]]:
+        output: list[tuple[str, ExtendedPath]] = []
         parsed_show = self.show_json_path.parsed_cached()
         # This is made assuming all seasons will always be available
-        for season_number in range(1, parsed_show["latestSeason"]):
-            season_page_0 = self.season_json_path(f"Season {season_number}_0")
+        for season_number in range(1, parsed_show["latestSeason"] + 1):
+            season_page_0 = self.season_json_path(season_number, 0)
             # Need to make sure pages exist before trying to parse them
             if season_page_0.exists():
                 parsed_season_page_0 = season_page_0.parsed_cached()
                 for page_number in range(parsed_season_page_0["results"][0]["nbPages"]):
-                    season_page = self.season_json_path(f"Season {season_number}_{page_number}")
+                    season_page = self.season_json_path(season_number, page_number)
                     # Need to make sure pages exist before trying to parse them
                     if season_page.exists():
                         parsed_season_page = season_page.parsed_cached()
                         for episode in parsed_season_page["results"][0]["hits"]:
-                            hd_image_url = self.hd_image_url(episode["search_photo"])
-                            output.append(hd_image_url)
-
+                            image_url = episode["search_photo"].replace(",w_268,h_268", "")
+                            image_path = self.episode_image_path(episode)
+                            output.append((image_url, image_path))
         return output
 
-    def hd_image_url(self, sd_image_url: str) -> str:
-        """Take a normal image URL and get the HD URL for the image"""
-        # Somehow this also works as a fallback when no HD image is available the lower resolution version will still be
-        # downloaded
-        partial_image_url = sd_image_url.split("/").pop(7)
-        hd_image_url = f"{self.IMAGE_BASE_URL}/{partial_image_url}"
-        return hd_image_url
+    def episode_image_path(self, data: dict[str, Any]) -> ExtendedPath:
+        file_name = ExtendedPath(data["search_photo"]).stem
+        return (self.files_dir() / "images" / file_name).with_suffix(".webp")
+
+    def season_json_path(self, season_number: int, page: int) -> JSONFile:
+        """Path for the JSON file that lists all of the episodes for a specific season"""
+        return season_json_path(self.files_dir(), season_number, page)
 
     def any_file_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if any of the files are missing or outdated"""
         output = self.show_json_outdated(minimum_timestamp)
         output = self.any_season_json_outdated(minimum_timestamp) or output
-        output = self.save_playwright_files() or output
+        output = self.any_episode_file_missing() or output
         return output
 
     def show_json_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if the show JSON file is missing or outdated"""
-        return self.check_if_outdated(self.show_json_path, "Show JSON", minimum_timestamp)
+        return self.is_file_outdated(self.show_json_path, "Show JSON", minimum_timestamp)
 
     def any_season_json_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if any of the season JSON files are missing or outdated"""
@@ -86,7 +94,7 @@ class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
         if self.show_json_path.exists():
             parsed_show = self.show_json_path.parsed_cached()
             # This is made assuming all seasons will always be available
-            for i in range(1, parsed_show["latestSeason"]):
+            for i in range(1, parsed_show["latestSeason"] + 1):
                 if self.season_json_outdated(i, minimum_timestamp):
                     output = True
         return output
@@ -94,44 +102,48 @@ class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
     def season_json_outdated(self, season_number: int, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if a single season JSON file is missing or outdated"""
         output = False
-        season_page_0 = self.season_json_path(f"Season {season_number}_0")
+        season_page_0 = self.season_json_path(season_number, 0)
 
         # If the first page is outdated assume later pages are outdated
-        if self.check_if_outdated(season_page_0, f"Season {season_number} Page 0"):
+        if self.is_file_outdated(season_page_0, f"Season {season_number} Page 0"):
             return True
 
         parsed_season_page_0 = season_page_0.parsed_cached()
 
         for page in range(parsed_season_page_0["results"][0]["nbPages"]):
-            season_path = self.season_json_path(f"Season {season_number}_{page}")
+            season_path = self.season_json_path(season_number, page)
             season_string = f"Season {season_number} Page {page}"
-            output = self.check_if_outdated(season_path, season_string, minimum_timestamp) or output
+            output = self.is_file_outdated(season_path, season_string, minimum_timestamp) or output
 
         return output
 
-    def save_playwright_files(self) -> bool:
+    def any_episode_file_missing(self) -> bool:
         """Check if any of the episode image files are missing"""
         if not self.show_json_path.exists():
             return False
         output = False
-        for image_url in self.episode_image_urls():
-            if self.check_if_outdated(self.image_path(image_url), "Episode Image"):
+        for _url, path in self.episode_image_tuples():
+            if self.is_file_outdated(path, "Episode Image"):
                 output = True
         return output
 
-    def playwright_save_json(self, response: Response) -> None:
+    def playwright_response_save_json(self, response: Response) -> None:
         """Save specific files from the response recieved by playwright"""
-        # https://www.americastestkitchen.com/api/v6/shows/cco
-        # https://www.americastestkitchen.com/api/v6/shows/atk
+        # Example URLs:
+        #   https://www.americastestkitchen.com/api/v6/shows/cco
+        #   https://www.americastestkitchen.com/api/v6/shows/atk
         if re.search(r"api/v6/shows/[a-z]+$", response.url):
             self.playwright_save_json_response(response, self.show_json_path)
 
-        # https://y1fnzxui30-dsn.algolia.net/1/indexes/*/queries?x-algolia-agent=Algolia%20for%20JavaScript%20(3.35.1)%3B%20Browser%3B%20JS%20Helper%20(3.10.0)%3B%20react%20(17.0.2)%3B%20react-instantsearch%20(6.30.2)&x-algolia-application-id=Y1FNZXUI30&x-algolia-api-key=8d504d0099ed27c1b73708d22871d805
+        # Example URL:
+        #   https://y1fnzxui30-dsn.algolia.net/1/indexes/*/queries?x-algolia-agent=Algolia%20for%20JavaScript%20(3.35.1)
+        #   %3B%20Browser%3B%20JS%20Helper%20(3.10.0)%3B%20react%20(17.0.2)%3B%20react-instantsearch%20(6.30.2)&x-algoli
+        #   a-application-id=Y1FNZXUI30&x-algolia-api-key=8d504d0099ed27c1b73708d22871d805
         if "algolia.net" in response.url:
             parsed_json = response.json()
-            season = list(parsed_json["results"][0]["facets"]["search_season_list"].keys())[0]
-            page = parsed_json["results"][0]["page"]
-            season_path = self.season_json_path(f"{season}_{page}")
+            season_number = int(list(parsed_json["results"][0]["facets"]["search_season_list"].keys())[0].split(" ")[1])
+            page_number = parsed_json["results"][0]["page"]
+            season_path = self.season_json_path(season_number, page_number)
             self.playwright_save_json_response(response, season_path)
 
     def download_all(self, minimum_timestamp: Optional[datetime] = None) -> None:
@@ -141,11 +153,11 @@ class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
                 page = self.playwright_browser(playwright).new_page()
                 stealth_sync(page)
 
-                page.on("response", self.playwright_save_json)
+                page.on("response", self.playwright_response_save_json)
                 self.download_show(page, minimum_timestamp)
                 self.download_seasons(page, minimum_timestamp)
 
-                page.on("response", self.playwright_save_images)
+                page.on("response", self.playwright_response_save_images)
                 self.download_episode_images(page)
 
                 page.close()
@@ -161,7 +173,7 @@ class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
         """Download all season JSON files if they are missing or outdated"""
         parsed_show = self.show_json_path.parsed_cached()
         # This is made assuming all seasons will always be available
-        for season_number in range(1, parsed_show["latestSeason"]):
+        for season_number in range(1, parsed_show["latestSeason"] + 1):
             if self.season_json_outdated(season_number, minimum_timestamp):
                 logging.getLogger(f"{self.logger_identifier()}.Scraping").info("Season %s", season_number)
                 # Only open the website if it isn't already open
@@ -177,7 +189,8 @@ class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
                     page.wait_for_timeout(1000)  # networkidle is not always enough so wait 1 extra second
 
                 # Click the button for the correct season then scroll to the bottom to load the first set of episodes
-                self.logged_click(page.get_by_text(f"Season {season_number}", exact=True), "Show all seasons button")
+                season_button = page.get_by_role("link", name=f"Season {season_number}", exact=True)
+                self.logged_click(season_button, "Show all seasons button")
                 page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 page.wait_for_load_state("networkidle")
                 page.wait_for_timeout(5000)  # Extra wait to avoid bans
@@ -198,13 +211,10 @@ class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
                 while self.season_json_outdated(season_number, minimum_timestamp):
                     page.wait_for_timeout(1000)
 
-    # This is the base URL used for the thumbnail of the video on the video page (sometimes)
-    IMAGE_BASE_URL = "https://res.cloudinary.com/hksqkdlah/image/upload/c_fill,dpr_2.0,f_auto,fl_lossy.progressive.strip_profile,g_faces:auto,q_auto:low"
-
     def download_episode_images(self, page: Page) -> None:
         """Download all episode images if they do not exist"""
-        for image_url in self.episode_image_urls():
-            self.playwright_download_image(page, image_url, "Episode")
+        for url, path in self.episode_image_tuples():
+            self.playwright_download_image(page, url, path, "Episode Image")
 
     def import_show(
         self,
@@ -227,8 +237,8 @@ class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
     ) -> None:
         parsed_show = self.show_json_path.parsed_cached()
         # This is made assuming all seasons will always be available
-        for season_number in range(1, parsed_show["latestSeason"]):
-            season_page_0 = self.season_json_path(f"Season {season_number}_0")
+        for season_number in range(1, parsed_show["latestSeason"] + 1):
+            season_page_0 = self.season_json_path(season_number, 0)
             season = Season().get_or_new(season_id=f"Season {season_number}", show=self.show)[0]
             if season.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
                 season.sort_order = season_number
@@ -244,12 +254,12 @@ class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
     ) -> None:
         parsed_show = self.show_json_path.parsed_cached()
         # This is made assuming all seasons will always be available
-        for season_number in range(1, parsed_show["latestSeason"]):
-            parsed_season_page_0 = self.season_json_path(f"Season {season_number}_0").parsed_cached()
+        for season_number in range(1, parsed_show["latestSeason"] + 1):
+            parsed_season_page_0 = self.season_json_path(season_number, 0).parsed_cached()
             season = Season().get_or_new(season_id=f"Season {season_number}", show=self.show)[0]
 
             for page_number in range(parsed_season_page_0["results"][0]["nbPages"]):
-                parsed_season_page = self.season_json_path(f"Season {season_number}_{page_number}").parsed_cached()
+                parsed_season_page = self.season_json_path(season_number, page_number).parsed_cached()
                 for parsed_episode in parsed_season_page["results"][0]["hits"]:
                     episode = Episode().get_or_new(episode_id=parsed_episode["objectID"], season=season)[0]
 
@@ -263,14 +273,14 @@ class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
                         seconds = int(parsed_episode["search_stickers"][0].split(":")[1])
                         episode.duration = minutes * 60 + seconds
 
-                        episode.url = f"{self.DOMAIN}{parsed_episode['search_atk_episode_url']}"
-
+                        episode.url = f"{self.DOMAIN}{parsed_episode['search_url']}"
                         raw_date = parsed_episode["search_document_date"]
                         episode.release_date = datetime.strptime(raw_date, "%Y-%m-%dT%H:%M:%S.%f%z").astimezone()
 
                         # No air date so just duplicate release_date
                         episode.air_date = episode.release_date
-                        hd_image_url = self.hd_image_url(parsed_episode["search_photo"])
-                        self.set_image(episode, hd_image_url)
+                        image_path = self.episode_image_path(parsed_episode)
+
+                        self.set_image(episode, image_path)
                         episode.deleted = False
                         episode.add_timestamps_and_save(season.info_timestamp)
