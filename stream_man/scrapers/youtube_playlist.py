@@ -33,7 +33,7 @@ def episode_json_path_cached(website: str, episode_id: str) -> JSONFile:
 
 # TODO: This currently only supports playlists in a rudimentary way. Need to eventually add support for channels which
 # will require numerous changes. I am just not sure if I will even ever use a channel as a URL instead of a playlist.
-class YouTubeShow(ScraperShowShared, AbstractScraperClass):
+class YouTubePlaylist(ScraperShowShared, AbstractScraperClass):
     """For now using this plugin requires yt-dlp uin the PATH"""
 
     WEBSITE = "YouTube"
@@ -183,8 +183,7 @@ class YouTubeShow(ScraperShowShared, AbstractScraperClass):
             parsed_show = self.show_json_path.parsed_cached()
 
             self.show.name = f"{parsed_show['channel']} - {parsed_show['title']}"
-            # TODO: Once support for a channel is added make this value more descriptive
-            self.show.media_type = "Videos"
+            self.show.media_type = "Playlist"
             self.show.show_id = self.show_id
             self.show.description = parsed_show["description"]
             self.show.favicon_url = self.FAVICON_URL
@@ -228,19 +227,13 @@ class YouTubeShow(ScraperShowShared, AbstractScraperClass):
                     episode.description = episode_json_parsed["description"]
                     episode.duration = episode_json_parsed["duration"]
 
-                    # Only one date
-                    # Convert 20171007 to datetime
-
                     date = datetime.strptime(episode_json_parsed["upload_date"], "%Y%m%d").astimezone()
                     episode.air_date = date
-                    episode.release_date = date
 
                     if release_timestamp := episode_json_parsed.get("release_timestamp"):
                         episode.release_date = datetime.fromtimestamp(release_timestamp).astimezone()
                     else:
-                        episode.release_date = (
-                            datetime.strptime(episode_json_parsed["upload_date"], "%Y%m%d")
-                        ).astimezone()
+                        episode.release_date = episode.air_date
 
                     image_path = self.image_path_from_dict(episode_json_parsed)
                     self.set_image(episode, image_path)
