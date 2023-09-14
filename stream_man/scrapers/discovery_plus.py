@@ -26,7 +26,7 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
 
     # Example show URL
     #   https://www.discoveryplus.com/show/mythbusters
-    URL_REGEX = re.compile(r"^(?:https:\/\/www\.discoveryplus\.com)?\/show\/(?P<show_id>.*)(?:\/|$)")
+    URL_REGEX = re.compile(rf"^{re.escape(DOMAIN)}?\\/show\/(?P<show_id>.*)(?:\/|$)")
 
     def __init__(self, show_url: str) -> None:
         super().__init__(show_url)
@@ -76,13 +76,13 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
 
     def show_json_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if the show json file is missing or outdated"""
-        return self.check_if_outdated(self.show_json_path, "Show JSON", minimum_timestamp)
+        return self.is_file_outdated(self.show_json_path, "Show JSON", minimum_timestamp)
 
     def show_image_missing(self) -> bool:
         """Check if the show image is missing"""
         if self.show_json_path.exists():
-            show_image_path = self.image_path(self.show_image_url())
-            return self.check_if_outdated(show_image_path, "Show Image")
+            show_image_path = self.image_path_from_url(self.show_image_url())
+            return self.is_file_outdated(show_image_path, "Show Image")
         return False
 
     def any_season_file_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
@@ -96,7 +96,7 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
 
     def season_json_outdated(self, season_number: str, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if the season JSON file for a specific season is missing or outdated"""
-        return self.check_if_outdated(self.season_json_path(season_number), "Season JSON", minimum_timestamp)
+        return self.is_file_outdated(self.season_json_path(season_number), "Season JSON", minimum_timestamp)
 
     def episode_image_urls(self) -> list[str]:
         output: list[str] = []
@@ -114,8 +114,8 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
         """Check if any of the episode images are missing"""
         output = False
         for image_url in self.episode_image_urls():
-            image_path = self.image_path(image_url)
-            output = self.check_if_outdated(image_path, "Episode Image")
+            image_path = self.image_path_from_url(image_url)
+            output = self.is_file_outdated(image_path, "Episode Image")
 
         return output
 
@@ -158,7 +158,7 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
                 self.download_show_json(page, minimum_timestamp)
                 self.download_seasons(page, minimum_timestamp)
 
-                page.on("response", self.playwright_save_images)
+                page.on("response", self.playwright_response_save_images)
                 self.download_show_image(page)
                 self.download_episode_images(page)
 
@@ -197,12 +197,12 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
 
     def download_show_image(self, page: Page) -> None:
         """Download the show image if it is missing or outdated"""
-        self.playwright_download_image(page, self.show_image_url(), "show")
+        self.playwright_download_image_if_needed(page, self.show_image_url(), "Show")
 
     def download_episode_images(self, page: Page) -> None:
         """Download all episode images that are missing or outdated"""
         for image_url in self.episode_image_urls():
-            self.playwright_download_image(page, image_url, "episode")
+            self.playwright_download_image_if_needed(page, image_url, "Episode")
 
     def import_show(
         self,
@@ -217,7 +217,8 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
             self.show.description = (
                 parsed_show["attributes"].get("longDescription") or parsed_show["attributes"]["description"]
             )
-            self.set_image(self.show, self.show_image_url())
+            image_path = self.image_path_from_url(self.show_image_url())
+            self.set_image(self.show, image_path)
             self.show.favicon_url = "https://www.discoveryplus.com/favicon.png"
             # parsed_show["type"] is not reliable for media type because movies are listed as "shows" see:
             # https://www.discoveryplus.com/show/roar-the-most-dangerous-movie-ever-made
@@ -288,7 +289,8 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
 
                         image_id = parsed_episode["relationships"]["images"]["data"][0]["id"]
                         image_url = self.episode_image_url(image_id, season_number)
-                        self.set_image(episode, str(self.image_path(image_url)))
+                        image_path = self.image_path_from_url(image_url)
+                        self.set_image(episode, image_path)
 
                         # No seperate file for episodes so just use the season file
                         episode.deleted = False

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from functools import cache
 from typing import TYPE_CHECKING
 
 import common.extended_re as re
@@ -21,13 +20,6 @@ if TYPE_CHECKING:
     from playwright.sync_api._generated import Page, Response
 
 
-@cache
-def season_json_path(files_dir: ExtendedPath, season_number: int, page: int) -> JSONFile:
-    """Path for the JSON file that lists all of the episodes for a specific season"""
-    return JSONFile(files_dir, "season", f"Season {season_number}", f"Page {page}.json")
-
-
-# TODO: Latest season does not fully download
 class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
     WEBSITE = "America's Test Kitchen"
     DOMAIN = "https://www.americastestkitchen.com"
@@ -69,13 +61,33 @@ class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
                             output.append((image_url, image_path))
         return output
 
+    def episode_image_urls(self) -> list[str]:
+        output: list[str] = []
+        parsed_show = self.show_json_path.parsed_cached()
+        # This is made assuming all seasons will always be available
+        for season_number in range(1, parsed_show["latestSeason"] + 1):
+            season_page_0 = self.season_json_path(season_number, 0)
+            # Need to make sure pages exist before trying to parse them
+            if season_page_0.exists():
+                parsed_season_page_0 = season_page_0.parsed_cached()
+                for page_number in range(parsed_season_page_0["results"][0]["nbPages"]):
+                    season_page = self.season_json_path(season_number, page_number)
+                    # Need to make sure pages exist before trying to parse them
+                    if season_page.exists():
+                        parsed_season_page = season_page.parsed_cached()
+                        for episode in parsed_season_page["results"][0]["hits"]:
+                            image_url = episode["search_photo"].replace(",w_268,h_268", "")
+                            output.append(image_url)
+        return output
+
+    def image_path_from_url(self, image_url: str) -> ExtendedPath:
+        # Special modification because
+        image_name = image_url.split("/")[-1]
+        return (self.files_dir() / "Images" / image_name).with_suffix(".webp")
+
     def episode_image_path(self, data: dict[str, Any]) -> ExtendedPath:
         file_name = ExtendedPath(data["search_photo"]).stem
         return (self.files_dir() / "images" / file_name).with_suffix(".webp")
-
-    def season_json_path(self, season_number: int, page: int) -> JSONFile:
-        """Path for the JSON file that lists all of the episodes for a specific season"""
-        return season_json_path(self.files_dir(), season_number, page)
 
     def any_file_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if any of the files are missing or outdated"""
@@ -122,7 +134,8 @@ class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
         if not self.show_json_path.exists():
             return False
         output = False
-        for _url, path in self.episode_image_tuples():
+        for url in self.episode_image_urls():
+            path = self.image_path_from_url(url)
             if self.is_file_outdated(path, "Episode Image"):
                 output = True
         return output
@@ -213,8 +226,8 @@ class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
 
     def download_episode_images(self, page: Page) -> None:
         """Download all episode images if they do not exist"""
-        for url, path in self.episode_image_tuples():
-            self.playwright_download_image(page, url, path, "Episode Image")
+        for url in self.episode_image_urls():
+            self.playwright_download_image_if_needed(page, url, "Episode Image")
 
     def import_show(
         self,

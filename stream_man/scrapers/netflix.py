@@ -31,7 +31,7 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
     #   https://www.netflix.com/browse?jbv=81511776
     #   https://www.netflix.com/title/81511776
     #   https://www.netflix.com/browse/genre/34399?jbv=1181461
-    URL_REGEX = re.compile(r"https?://www\.netflix\.com/(?:browse.*?\?jbv=|title/)(?P<show_id>\d+)")
+    URL_REGEX = re.compile(rf"^{re.escape(DOMAIN)}/(?:browse.*?\?jbv=|title/)(?P<show_id>\d+)")
 
     @classmethod
     def credential_keys(cls) -> list[str]:
@@ -80,9 +80,9 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
 
     def show_files_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if any of the show files are missing or outdated"""
-        output = self.check_if_outdated(self.show_json_path, "Show JSON", minimum_timestamp)
-        output = self.check_if_outdated(self.show_html_path, "Show HTML", minimum_timestamp) or output
-        output = self.check_if_outdated(self.seasons_json_path, "Show JSON", minimum_timestamp) or output
+        output = self.is_file_outdated(self.show_json_path, "Show JSON", minimum_timestamp)
+        output = self.is_file_outdated(self.show_html_path, "Show HTML", minimum_timestamp) or output
+        output = self.is_file_outdated(self.seasons_json_path, "Show JSON", minimum_timestamp) or output
         return output
 
     def season_files_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
@@ -92,13 +92,13 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
 
         output = False
 
-        if self.check_if_outdated(self.seasons_json_path, "Seasons JSON", minimum_timestamp):
+        if self.is_file_outdated(self.seasons_json_path, "Seasons JSON", minimum_timestamp):
             output = True
 
         if self.show_json_path.exists():
             for season_id in self.seasons_json_path.parsed_cached()["jsonGraph"]["seasons"]:
                 season_file = self.season_json_path(season_id)
-                if self.check_if_outdated(season_file, f"Seasons {season_id} JSON", minimum_timestamp):
+                if self.is_file_outdated(season_file, f"Seasons {season_id} JSON", minimum_timestamp):
                     output = True
 
         return output
@@ -106,8 +106,8 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
     def show_image_missing(self) -> bool:
         """Check if the show image is missing"""
         if self.show_html_path.exists():
-            image_path = self.image_path(self.show_img_url())
-            return self.check_if_outdated(image_path, "Show image")
+            image_path = self.image_path_from_url(self.show_img_url())
+            return self.is_file_outdated(image_path, "Show image")
 
         return False
 
@@ -116,8 +116,8 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
         output = False
         if self.seasons_json_path.exists():
             for image_url in self.episode_image_urls():
-                image_path = self.image_path(image_url)
-                output = self.check_if_outdated(image_path, "Show image") or output
+                image_path = self.image_path_from_url(image_url)
+                output = self.is_file_outdated(image_path, "Show image") or output
 
         return output
 
@@ -157,7 +157,7 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
                 self.download_show(page, minimum_timestamp)
                 self.download_seasons(page, minimum_timestamp)
 
-                page.on("response", self.playwright_save_images)
+                page.on("response", self.playwright_response_save_images)
                 self.download_show_image(page)
                 self.download_episode_images(page)
 
@@ -194,11 +194,11 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
 
     def download_show_image(self, page: Page) -> None:
         """Download the show image if it does not exist"""
-        self.playwright_download_image(page, self.show_img_url(), "show")
+        self.playwright_download_image_if_needed(page, self.show_img_url(), "show")
 
     def download_episode_images(self, page: Page) -> None:
         for image_url in self.episode_image_urls():
-            self.playwright_download_image(page, image_url, "show")
+            self.playwright_download_image_if_needed(page, image_url, "Show")
 
     def go_to_page_logged_in(
         self,
@@ -330,7 +330,8 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
                 # No air date so just duplicate release_date
                 episode.air_date = episode.release_date
                 episode.deleted = False
-                self.set_image(episode, self.show.image.url)
+                image_path = self.image_path_from_url(self.show_img_url())
+                self.set_image(episode, image_path)
                 episode.add_timestamps_and_save(season.info_timestamp)
         else:
             for season_id in self.seasons_json_path.parsed_cached()["jsonGraph"]["seasons"]:
@@ -355,6 +356,8 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
                         episode.release_date = datetime.fromtimestamp(unix_timestamp).astimezone()
                         # No air date so just duplicate release_date
                         episode.air_date = episode.release_date
-                        self.set_image(episode, self.episode_image_url(parsed_episode))
+                        image_url = self.episode_image_url(parsed_episode)
+                        image_path = self.image_path_from_url(image_url)
+                        self.set_image(episode, image_path)
                         episode.deleted = False
                         episode.add_timestamps_and_save(season.info_timestamp)

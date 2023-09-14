@@ -32,9 +32,12 @@ if TYPE_CHECKING:
 
 
 @cache
-def season_json_path_cached(files_dir: ExtendedPath, season_id: str) -> JSONFile:
+def season_json_path_cached(files_dir: ExtendedPath, season_id: str | int, page: Optional[int]) -> JSONFile:
     """Path for the JSON file that lists all of the episodes for a specific season"""
-    return JSONFile(files_dir, "season", f"{season_id}.json")
+    if page:
+        return JSONFile(files_dir, "Season", f"{season_id}", f"{page}.json")
+    else:
+        return JSONFile(files_dir, "Season", f"{season_id}.json")
 
 
 class ScraperShared:
@@ -122,8 +125,10 @@ class ScraperShowShared(ABC, ScraperShared):
         self.show_id = str(re.strict_search(self.URL_REGEX, show_url).group("show_id"))
         self.show = Show().get_or_new(show_id=self.show_id, website=self.WEBSITE)[0]
         self.show_json_path = JSONFile(self.files_dir(), "show.json")
+        self.playwright_image_path = None
 
     def show_object(self) -> Show:
+        """Due to subclassing AbstractScraperClass this is the easiest type safe way to access self.show"""
         return self.show
 
     def files_dir(self) -> ExtendedPath:
@@ -133,11 +138,11 @@ class ScraperShowShared(ABC, ScraperShared):
         """Returns the file path relative to the downloaded files directory which is easier to read when logging"""
         return str(file_path.relative_to(DOWNLOADED_FILES_DIR))
 
-    def check_if_outdated(
+    def is_file_outdated(
         self, file_path: ExtendedPath, file_type: str, minimum_timestamp: Optional[datetime] = None
     ) -> bool:
         """Check if a specific image is missing or outdated"""
-        # This is basically a re-implementation of ExtendedPath.outdated but with added logging
+        # This is basically a re-implementation of ExtendedPath.outdated() but with added logging
         if not file_path.exists():
             logger = logging.getLogger(f"{self.logger_identifier()}:Missing:{file_type}")
             logger.info(self.pretty_file_path(file_path))
@@ -259,9 +264,9 @@ class ScraperShowShared(ABC, ScraperShared):
     ) -> None:
         """Import all of the information for an episode without downloading any of the files"""
 
-    def season_json_path(self, season_id: str) -> JSONFile:
+    def season_json_path(self, season_id: str | int, page: Optional[int] = None) -> JSONFile:
         """Path for the JSON file that lists all of the episodes for a specific season"""
-        return season_json_path_cached(self.files_dir(), season_id)
+        return season_json_path_cached(self.files_dir(), season_id, page)
 
     def set_update_at(self) -> None:
         """Set the update_at value of show based on when the last episode aired."""
@@ -276,47 +281,52 @@ class ScraperShowShared(ABC, ScraperShared):
                 self.show.update_at = self.show.info_timestamp + timedelta(days=365 / 12)
         self.show.save()
 
-    def image_path(self, image_url: str) -> ExtendedPath:
+    # TODO: Move this to each sub-class to make the file names more descriptive
+    def image_path_from_url(self, image_url: str) -> ExtendedPath:
+        """Automatically generated image path based on the image URL"""
         image_name = image_url.split("/")[-1]
-        return self.files_dir() / "images" / image_name
+        return self.files_dir() / "Images" / image_name
 
-    def playwright_download_image(self, page: Page, image_url: str, image_source: str) -> None:
+    def playwright_download_image_if_needed(
+        self, page: Page, url: str, image_source: str, path: Optional[ExtendedPath] = None
+    ) -> None:
         """Download a specific image using playwright if it does not exist"""
-        image_path = self.image_path(image_url)
+        if not path:
+            path = self.image_path_from_url(url)
 
-        if self.check_if_outdated(image_path, f"{image_source} image"):
-            self.logged_goto(page, image_url, image_url, wait_until="networkidle")
+        if self.is_file_outdated(path, f"{image_source} image"):
+            self.logged_goto(page, url, url, wait_until="networkidle")
             page.wait_for_timeout(1000)
 
             # Sometimes images are over 10 MB, when that happens Playwright will have an error because it is unable to
             # download files larger than 10 MB see: https://github.com/microsoft/playwright/issues/13449
             # When this happens download the file using urllib instead
             try:
-                self.playwright_wait_for_files(page, image_path)
+                self.playwright_wait_for_files(page, path)
             except FileNotFoundError:
-                self.urllib_downloada_image(image_url, image_source)
+                self.urllib_download_if_needed(url, path, image_source)
 
-    def urllib_downloada_image(self, image_url: str, image_source: str) -> None:
+    def urllib_download_if_needed(self, url: str, path: ExtendedPath, image_source: str) -> None:
         """Download a specific image using playwright"""
-        image_path = self.image_path(image_url)
+        logging.getLogger(f"{self.logger_identifier()}.Downloading").info(image_source)
 
-        if not image_path.exists():
-            image_path.parent.mkdir(parents=True, exist_ok=True)
-            urllib.request.urlretrieve(image_url, image_path)
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            urllib.request.urlretrieve(url, path)
 
-    def playwright_save_images(self, response: Response) -> None:
+    def playwright_response_save_images(self, response: Response) -> None:
         """Save every image file that is requested by playwright"""
+        if self.playwright_image_path:
+            self.playwright_image_path.write(response.body())
+        else:
+            raise Exception("No image path was set")
 
-        self.image_path(response.url).write(response.body())
-
-    def set_image(self, model_object: Episode | Show, image_url: str):
-        """Set the image for a model object and hardlink the image so it can be accessed through Django"""
-        image_path = self.image_path(image_url)
-        pretty_name = self.pretty_file_path(image_path)
-        model_object.image.name = pretty_name
+    def set_image(self, model_object: Episode | Show, image_path: ExtendedPath) -> None:
+        """Set the image for a model object and hardlink the image so it can be easily accessed through Django"""
+        model_object.image.name = str(image_path)
 
         # Hardlink the file so it can be served through the server easier
-        media_path = MEDIA_ROOT / pretty_name
+        media_path = MEDIA_ROOT / image_path
         if not media_path.exists():
             media_path.parent.mkdir(parents=True, exist_ok=True)
             media_path.hardlink_to(image_path)

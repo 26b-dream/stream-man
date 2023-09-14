@@ -20,8 +20,9 @@ if TYPE_CHECKING:
 
 
 class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
+    DOMAIN = "https://www.crunchyroll.com"
     # Example URL: https://www.crunchyroll.com/watch/G25FVD45Q/009-1-the-end-of-the-beginning
-    URL_REGEX = re.compile(r"^(?:https:\/\/w?w?w?.?crunchyroll\.com)?\/watch\/*(?P<show_id>.*?)(?:\/|$)")
+    URL_REGEX = re.compile(rf"^{re.escape(DOMAIN)}\/watch\/*(?P<show_id>.*?)(?:\/|$)")
 
     def __init__(self, show_url: str) -> None:
         super().__init__(show_url)
@@ -37,16 +38,16 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
 
     def movie_json_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if the either of the movie JSON files are missing or outdated"""
-        output = self.check_if_outdated(self.movie_json_path, "Movie JSON", minimum_timestamp)
-        output = self.check_if_outdated(self.movie_2_json_path, "Movie 2 JSON", minimum_timestamp) or output
+        output = self.is_file_outdated(self.movie_json_path, "Movie JSON", minimum_timestamp)
+        output = self.is_file_outdated(self.movie_2_json_path, "Movie 2 JSON", minimum_timestamp) or output
         return output
 
     def movie_image_missing(self) -> bool:
         """Check if the movie image file is missing"""
         if self.movie_2_json_path.exists():
             image_url = self.strict_image_url(self.movie_2_json_path, "poster_wide")
-            image_path = self.image_path(image_url)
-            return self.check_if_outdated(image_path, "Movie image")
+            image_path = self.image_path_from_url(image_url)
+            return self.is_file_outdated(image_path, "Movie image")
 
         return False
 
@@ -54,8 +55,8 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
         """Check if the episode image file is missing"""
         if self.movie_json_path.exists():
             image_url = self.strict_image_url(self.movie_json_path, "thumbnail")
-            image_path = self.image_path(image_url)
-            return self.check_if_outdated(image_path, "Episode image")
+            image_path = self.image_path_from_url(image_url)
+            return self.is_file_outdated(image_path, "Episode image")
 
         return False
 
@@ -69,7 +70,7 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
                 page.on("response", self.save_playwright_files)
                 self.download_movie(page, minimum_timestamp)
 
-                page.on("response", self.playwright_save_images)
+                page.on("response", self.playwright_response_save_images)
                 self.download_movie_image(page)
                 self.download_episode_image(page)
 
@@ -86,12 +87,12 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
     def download_movie_image(self, page: Page) -> None:
         """Download the movie image if it is missing or outdated"""
         url = self.strict_image_url(self.movie_2_json_path, "poster_wide")
-        self.playwright_download_image(page, url, "Movie")
+        self.playwright_download_image_if_needed(page, url, "Movie")
 
     def download_episode_image(self, page: Page) -> None:
         """Download the episode image if it is missing or outdated"""
         url = self.strict_image_url(self.movie_json_path, "thumbnail")
-        self.playwright_download_image(page, url, "Episode")
+        self.playwright_download_image_if_needed(page, url, "Episode")
 
     def save_playwright_files(self, response: Response) -> None:
         """Save specific files from the response recieved by playwright"""
@@ -156,7 +157,8 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
             episode.air_date = datetime.strptime(parsed_movie_extra["premium_available_date"], strp)
             episode.release_date = episode.air_date
             image_url = self.strict_image_url(self.movie_json_path, "thumbnail")
-            self.set_image(episode, image_url)
+            image_path = self.image_path_from_url(image_url)
+            self.set_image(episode, image_path)
 
             # No seperate file for episodes so just use the season file
             episode.deleted = False

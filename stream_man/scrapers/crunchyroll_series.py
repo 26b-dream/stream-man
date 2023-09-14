@@ -20,10 +20,11 @@ if TYPE_CHECKING:
 
 
 class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
+    DOMAIN = "https://www.crunchyroll.com"
     # Example show URLs
     #   https://www.crunchyroll.com/series/G63VW2VWY
     #   https://www.crunchyroll.com/series/G63VW2VWY/non-non-biyori
-    URL_REGEX = re.compile(r"^(?:https:\/\/w?w?w?.?crunchyroll\.com)?\/series\/*(?P<show_id>.*?)(?:\/|$)")
+    URL_REGEX = re.compile(rf"^{re.escape(DOMAIN)}\/series\/*(?P<show_id>.*?)(?:\/|$)")
 
     def __init__(self, show_url: str) -> None:
         super().__init__(show_url)
@@ -40,16 +41,16 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
     def show_json_or_show_seasons_json_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if show JSON or show seasons JSON is missing or outdated"""
         # Why does black have to make this so ugly?
-        output = self.check_if_outdated(self.show_json_path, "Show JSON", minimum_timestamp)
-        output = self.check_if_outdated(self.show_seasons_json_path, "Show Seasons JSON", minimum_timestamp) or output
+        output = self.is_file_outdated(self.show_json_path, "Show JSON", minimum_timestamp)
+        output = self.is_file_outdated(self.show_seasons_json_path, "Show Seasons JSON", minimum_timestamp) or output
         return output
 
     def show_image_missing(self) -> bool:
         """Check if a specific show image is missing"""
         if self.show_json_path.exists():
             image_url = self.strict_image_url(self.show_json_path, "poster_wide")
-            image_path = self.image_path(image_url)
-            return self.check_if_outdated(image_path, "Show image")
+            image_path = self.image_path_from_url(image_url)
+            return self.is_file_outdated(image_path, "Show image")
 
         return False
 
@@ -70,15 +71,15 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
     def any_season_file_outdated(self, season_id: str, minimum_timestamp: Optional[datetime] = None) -> bool:
         """Check if the season file for a specific season is missing or outdated"""
         season_json_path = self.season_json_path(season_id)
-        return self.check_if_outdated(season_json_path, "Season JSON", minimum_timestamp)
+        return self.is_file_outdated(season_json_path, "Season JSON", minimum_timestamp)
 
     def any_episode_image_missing(self) -> bool:
         """Check if any of the episode images are missing"""
         output = False
 
         for image_url in self.episode_image_urls():
-            image_path = self.image_path(image_url)
-            output = self.check_if_outdated(image_path, "Episode image") or output
+            image_path = self.image_path_from_url(image_url)
+            output = self.is_file_outdated(image_path, "Episode image") or output
 
         return output
 
@@ -124,7 +125,7 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
                 self.download_show(page, minimum_timestamp)
                 self.download_seasons(page, minimum_timestamp)
 
-                page.on("response", self.playwright_save_images)
+                page.on("response", self.playwright_response_save_images)
                 self.download_show_image(page)
                 self.download_episode_images(page)
 
@@ -142,7 +143,7 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
         """Download the show image if it is missing or outdated, this is a seperate function from downloading the
         show because it is easier to download all of the images after downloading all of the JSON files"""
         image_url = self.strict_image_url(self.show_json_path, "poster_wide")
-        self.playwright_download_image(page, image_url, "show")
+        self.playwright_download_image_if_needed(page, image_url, "Show")
 
     def download_seasons(self, page: Page, minimum_timestamp: Optional[datetime] = None) -> None:
         """Download all of the season files that are missing or outdated"""
@@ -174,7 +175,7 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
     def download_episode_images(self, page: Page) -> None:
         """Download all of the episode files that are missing or outdated"""
         for image_url in self.episode_image_urls():
-            self.playwright_download_image(page, image_url, "episode")
+            self.playwright_download_image_if_needed(page, image_url, "Episode")
 
     def season_button(self, page: Page, season: dict[str, str]) -> ElementHandle:
         """Find the button that changes the season shown on the show page"""
@@ -246,7 +247,8 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
                     # Every now and then a show just won't have thumbnails and the thumbnail will be added a few weeks
                     # later, see: https://beta.crunchyroll.com/series/G79H23VD4/im-kodama-kawashiri
                     if image_url := self.image_url(self.season_json_path(season["id"]), "thumbnail", i):
-                        self.set_image(episode_info, image_url)
+                        image_path = self.image_path_from_url(image_url)
+                        self.set_image(episode_info, image_path)
 
                     episode_info.deleted = False
                     # No seperate file for episodes so just use the season file because it has episode information

@@ -52,7 +52,8 @@ class CrunchyRollShared(ScraperShowShared):
             self.show.name = parsed_json["title"]
             self.show.description = parsed_json["description"]
             image_url = self.strict_image_url(json_path, "poster_wide")
-            self.set_image(self.show, image_url)
+            image_path = self.image_path_from_url(image_url)
+            self.set_image(self.show, image_path)
             self.show.favicon_url = self.FAVICON_URL
             self.show.deleted = False
             self.show.add_timestamps_and_save(json_path)
