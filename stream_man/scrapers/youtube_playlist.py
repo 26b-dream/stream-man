@@ -31,8 +31,7 @@ def episode_json_path_cached(website: str, episode_id: str) -> JSONFile:
     return JSONFile(DOWNLOADED_FILES_DIR / website / f"episodes/{episode_id}.json")
 
 
-# TODO: This currently only supports playlists in a rudimentary way. Need to eventually add support for channels which
-# will require numerous changes. I am just not sure if I will even ever use a channel as a URL instead of a playlist.
+# TODO: Special code to better determine when a playlist should be updated
 class YouTubePlaylist(ScraperShowShared, AbstractScraperClass):
     """For now using this plugin requires yt-dlp uin the PATH"""
 
@@ -42,8 +41,6 @@ class YouTubePlaylist(ScraperShowShared, AbstractScraperClass):
 
     # Example show URLs
     #   https://www.youtube.com/playlist?list=PLSGAdUaWI73FQd0gWRj2GP9Ruln7HvEtq
-    #   https://www.youtube.com/channel/UCAcsAE1tpLuP3y7UhxUoWpQ
-    #   https://www.youtube.com/@Rambalac
     URL_REGEX = re.compile(rf"^{re.escape(DOMAIN)}\/playlist\?list=(?P<show_id>.*?)(?:$)")
 
     def __init__(self, show_url: str) -> None:
@@ -52,7 +49,6 @@ class YouTubePlaylist(ScraperShowShared, AbstractScraperClass):
         # self.show_html_path = HTMLFile(self.files_dir(), "show.html")
         # self.seasons_json_path = JSONFile(self.files_dir(), "seasons.json")
 
-    # TODO: Cache this
     def image_url_from_dict(self, data: dict[str, Any]) -> str:
         if data.get("thumbnail"):
             return data["thumbnail"]
@@ -64,6 +60,7 @@ class YouTubePlaylist(ScraperShowShared, AbstractScraperClass):
         return episode_json_path_cached(self.WEBSITE, episode_id)
 
     def any_file_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
+        """Check if any of the files are missing or outdated"""
         output = self.show_files_outdated(minimum_timestamp)
         output = self.episode_files_outdated(minimum_timestamp) or output
         output = self.any_episode_image_missing() or output
