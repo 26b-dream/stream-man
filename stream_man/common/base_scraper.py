@@ -294,6 +294,8 @@ class ScraperShowShared(ABC, ScraperShared):
         if not path:
             path = self.image_path_from_url(url)
 
+        self.playwright_image_path = path
+
         if self.is_file_outdated(path, f"{image_source} image"):
             self.logged_goto(page, url, url, wait_until="networkidle")
             page.wait_for_timeout(1000)
@@ -323,10 +325,11 @@ class ScraperShowShared(ABC, ScraperShared):
 
     def set_image(self, model_object: Episode | Show, image_path: ExtendedPath) -> None:
         """Set the image for a model object and hardlink the image so it can be easily accessed through Django"""
-        model_object.image.name = str(image_path)
+        pretty_name = self.pretty_file_path(image_path)
+        model_object.image.name = pretty_name
 
         # Hardlink the file so it can be served through the server easier
-        media_path = MEDIA_ROOT / image_path
+        media_path = MEDIA_ROOT / pretty_name
         if not media_path.exists():
             media_path.parent.mkdir(parents=True, exist_ok=True)
             media_path.hardlink_to(image_path)
