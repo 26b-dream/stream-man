@@ -41,26 +41,6 @@ class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
 
         self.seasons_json_path = JSONFile(self.files_dir(), "seasons.json")
 
-    def episode_image_tuples(self) -> list[tuple[str, ExtendedPath]]:
-        output: list[tuple[str, ExtendedPath]] = []
-        parsed_show = self.show_json_path.parsed_cached()
-        # This is made assuming all seasons will always be available
-        for season_number in range(1, parsed_show["latestSeason"] + 1):
-            season_page_0 = self.season_json_path(season_number, 0)
-            # Need to make sure pages exist before trying to parse them
-            if season_page_0.exists():
-                parsed_season_page_0 = season_page_0.parsed_cached()
-                for page_number in range(parsed_season_page_0["results"][0]["nbPages"]):
-                    season_page = self.season_json_path(season_number, page_number)
-                    # Need to make sure pages exist before trying to parse them
-                    if season_page.exists():
-                        parsed_season_page = season_page.parsed_cached()
-                        for episode in parsed_season_page["results"][0]["hits"]:
-                            image_url = episode["search_photo"].replace(",w_268,h_268", "")
-                            image_path = self.episode_image_path(episode)
-                            output.append((image_url, image_path))
-        return output
-
     def episode_image_urls(self) -> list[str]:
         output: list[str] = []
         parsed_show = self.show_json_path.parsed_cached()
