@@ -142,7 +142,7 @@ class YouTubePlaylist(ScraperShowShared, AbstractScraperClass):
                     # TODO: Use this information to predict when the next udpate should be
                     raw_json = subprocess.run(command, stdout=PIPE, stderr=PIPE, check=True).stdout.decode("utf-8")
                     episode_json_path.write(raw_json)
-                    episode_json_path.parsed_cached = json.loads(raw_json)
+                    episode_json_path.parsed_cached_value = json.loads(raw_json)
 
     def download_episode_images(self, page: Page) -> None:
         """Download a specific image using playwright if it does not exist"""
