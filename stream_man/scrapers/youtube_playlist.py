@@ -41,7 +41,8 @@ class YouTubePlaylist(ScraperShowShared, AbstractScraperClass):
 
     # Example show URLs
     #   https://www.youtube.com/playlist?list=PLSGAdUaWI73FQd0gWRj2GP9Ruln7HvEtq
-    URL_REGEX = re.compile(rf"^{re.escape(DOMAIN)}\/playlist\?list=(?P<show_id>.*?)(?:$)")
+    #   https://www.youtube.com/watch?v=nYfum3RdpuI&list=UULFL5_yRx9ujWPqH2lwD5d5_w
+    URL_REGEX = re.compile(rf"^{re.escape(DOMAIN)}.*?list=(?P<show_id>.*?)(?:$)")
 
     def __init__(self, show_url: str) -> None:
         super().__init__(show_url)
@@ -119,7 +120,7 @@ class YouTubePlaylist(ScraperShowShared, AbstractScraperClass):
 
             raw_json = subprocess.run(command, stdout=PIPE, stderr=PIPE, check=True).stdout.decode("utf-8")
             self.show_json_path.write(raw_json)
-            self.show_json_path.parsed_cached = json.loads(raw_json)
+            self.show_json_path.parsed_cached_value = json.loads(raw_json)
 
     def download_episodes(self, minimum_timestamp: Optional[datetime] = None) -> None:
         if self.episode_files_outdated(minimum_timestamp):
