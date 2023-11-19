@@ -237,7 +237,6 @@ class ScraperShowShared(ABC, ScraperShared):
         self.import_show(minimum_info_timestamp, minimum_modified_timestamp)
         self.import_seasons(minimum_info_timestamp, minimum_modified_timestamp)
         self.import_episodes(minimum_info_timestamp, minimum_modified_timestamp)
-
         self.set_update_at()
 
     @abstractmethod
@@ -271,11 +270,17 @@ class ScraperShowShared(ABC, ScraperShared):
     def set_update_at(self) -> None:
         """Set the update_at value of show based on when the last episode aired."""
         latest_episode = Episode.objects.filter(season__show=self.show, deleted=False).order_by("-release_date").first()
-
         if latest_episode:
             # If the episode aired within a month of the last download update the information weekly
             if latest_episode.release_date > self.show.info_timestamp - timedelta(days=365 / 12):
-                self.show.update_at = latest_episode.release_date + timedelta(days=7)
+                weekly_airing = latest_episode.release_date + timedelta(days=7)
+
+                # If the weekly update has not yet occured update the information a week after the last episode aired
+                if weekly_airing > datetime.now().astimezone():
+                    self.show.update_at = weekly_airing
+                # If the weekly update has already occured update the information a week from the last update
+                else:
+                    self.show.update_at = self.show.info_timestamp + timedelta(days=7)
             # Any other situation update the information monthly
             else:
                 self.show.update_at = self.show.info_timestamp + timedelta(days=365 / 12)
