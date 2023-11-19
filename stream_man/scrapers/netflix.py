@@ -272,8 +272,8 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
             self.show.name = show_thing["jawSummary"]["value"]["title"]
             self.show.description = show_thing["jawSummary"]["value"]["synopsis"]
             self.show.media_type = show_thing["jawSummary"]["value"]["type"].title()
-            img_url = show_thing["jawSummary"]["value"]["backgroundImage"]["url"].split("?")[0]
-            self.set_image(self.show, img_url)
+
+            self.set_image(self.show, self.image_path_from_url(self.show_img_url()))
             self.show.url = self.show_url
             self.show.favicon_url = parsed_show_html.strict_select_one("link[rel='shortcut icon']").attrs["href"]
             self.show.deleted = False
@@ -318,6 +318,12 @@ class NetflixShow(ScraperShowShared, AbstractScraperClass):
             if episode.is_outdated(minimum_info_timestamp, minimum_modified_timestamp):
                 falcor_cache = self.falcor_cache()
                 show_thing = falcor_cache["videos"][self.show_id]
+
+                # Deal with deleted content
+                if not "availability" in show_thing["bobSummary"]["value"].keys():
+                    return
+
+                print(show_thing)
                 episode.sort_order = 0
                 episode.description = self.show.description
                 episode.number = "0"
