@@ -25,9 +25,9 @@ class Show(ModelWithIdAndTimestamp, GetOrNew):
     # Sometimes media types are not specified, or movies and TV shows will be mixed together
     #   Crunchyroll mixese movies and TV shows together
     media_type = models.CharField(max_length=256, blank=True)
-    description = models.TextField()
+    description = models.TextField(blank=True)
     image = models.ImageField(upload_to="images", null=True, blank=True)
-    url = models.CharField(max_length=255)
+    url = models.CharField(max_length=255, null=False)
     favicon_url = models.CharField(max_length=255)
     # Null is allowed because you often need to import the Show before the episodes, but update_at is calculated based
     # on episode information
@@ -36,6 +36,9 @@ class Show(ModelWithIdAndTimestamp, GetOrNew):
 
     def __str__(self) -> str:
         return self.name
+
+    # https://www.youtube.com/playlist?list=UULFpFFItkfZz1qz5PpHpqzYBw
+    # https://www.youtube.com/playlist?list=A_rK2tAIFLA&list=UULFMX31RavkfUHJvw03RbUZnA
 
     def last_watched_date(self) -> date:
         """Date that an episode was last watched"""
