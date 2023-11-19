@@ -33,9 +33,9 @@ django-types = "^0.17.0"
 playwright = "^1.34"
 playwright-stealth = "^1.0.5"
 
-django_model_helpers = { git = "https://github.com/26b-dream/django-model-helpers" }
-json_file = { git = "https://github.com/26b-dream/json-file" }
-html_file = { git = "https://github.com/26b-dream/html-file" }
+django_model_helpers = { git = "https://github.com/ryn-cx/django-model-helpers" }
+json_file = { git = "https://github.com/ryn-cx/json-file" }
+html_file = { git = "https://github.com/ryn-cx/html-file" }
 pillow = "^9.5.0"
 cryptography = "^41.0.1"
 pytest = "^7.4.0"

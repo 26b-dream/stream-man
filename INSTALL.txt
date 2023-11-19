@@ -2,4 +2,4 @@ python3 -m venv .venv
 source .venv/bin/Activate
 poetry install --with=dev
 # Add realpath ./stream_man to PYTHONPATH in export
-# Example: export PYTHONPATH="/Users/26b-dream/Documents/stream-man/stream_man"
+# Example: export PYTHONPATH="/Users/ryn-cx/Documents/stream-man/stream_man"
