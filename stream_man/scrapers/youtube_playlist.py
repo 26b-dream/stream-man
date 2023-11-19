@@ -129,8 +129,7 @@ class YouTubePlaylist(ScraperShowShared, AbstractScraperClass):
                 episode_json_path = self.episode_json_path(x["id"])
 
                 if not episode_json_path.exists():
-                    log_string = f"Downloading episode information {x['title']}"
-                    logging.getLogger(self.logger_identifier()).info(log_string)
+                    logging.getLogger(self.logger_identifier() + "Downloading Episode Information").info(x["title"])
                     command = [
                         "yt-dlp",
                         "--ignore-errors",  # Ignore errors because private/deleted videos will cause errors
@@ -224,6 +223,7 @@ class YouTubePlaylist(ScraperShowShared, AbstractScraperClass):
                     episode.number = str(i)
                     episode.description = episode_json_parsed["description"]
                     episode.duration = episode_json_parsed["duration"]
+                    episode.url = f"https://youtu.be/{partial_episode['id']}"
 
                     date = datetime.strptime(episode_json_parsed["upload_date"], "%Y%m%d").astimezone()
                     episode.air_date = date
