@@ -182,6 +182,7 @@ class YouTubePlaylist(ScraperShowShared, AbstractScraperClass):
             self.show.name = f"{parsed_show['channel']} - {parsed_show['title']}"
             self.show.media_type = "Playlist"
             self.show.show_id = self.show_id
+            self.show_url = f"{self.DOMAIN}/playlist?list={self.show_id}"
             self.show.description = parsed_show["description"]
             self.show.favicon_url = self.FAVICON_URL
             self.show.deleted = False
