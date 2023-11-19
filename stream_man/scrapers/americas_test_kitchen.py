@@ -167,6 +167,10 @@ class AmericasTestKitchen(ScraperShowShared, AbstractScraperClass):
         parsed_show = self.show_json_path.parsed_cached()
         # This is made assuming all seasons will always be available
         for season_number in range(1, parsed_show["latestSeason"] + 1):
+            # ! Kinda sketch speed up, once a season is downloaded never touch it again. May cause issues in the future.
+            if self.season_json_path(season_number + 1):
+                continue
+
             if self.season_json_outdated(season_number, minimum_timestamp):
                 logging.getLogger(f"{self.logger_identifier()}.Scraping").info("Season %s", season_number)
                 # Only open the website if it isn't already open
