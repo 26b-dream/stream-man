@@ -273,7 +273,7 @@ class ScraperShowShared(ABC, ScraperShared):
         latest_episode = Episode.objects.filter(season__show=self.show, deleted=False).order_by("-release_date").first()
 
         if latest_episode:
-            # If the episode aired within a week of the last download update the information weekly
+            # If the episode aired within a month of the last download update the information weekly
             if latest_episode.release_date > self.show.info_timestamp - timedelta(days=365 / 12):
                 self.show.update_at = latest_episode.release_date + timedelta(days=7)
             # Any other situation update the information monthly
