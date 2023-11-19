@@ -26,7 +26,7 @@ class DiscoveryPlusShow(ScraperShowShared, AbstractScraperClass):
 
     # Example show URL
     #   https://www.discoveryplus.com/show/mythbusters
-    URL_REGEX = re.compile(rf"^{re.escape(DOMAIN)}?\\/show\/(?P<show_id>.*)(?:\/|$)")
+    URL_REGEX = re.compile(rf"^{re.escape(DOMAIN)}\/show\/(?P<show_id>.*)(?:\/|$)")
 
     def __init__(self, show_url: str) -> None:
         super().__init__(show_url)
