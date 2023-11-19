@@ -224,7 +224,7 @@ class YouTubePlaylist(ScraperShowShared, AbstractScraperClass):
                     episode.number = str(i)
                     episode.description = episode_json_parsed["description"]
                     episode.duration = episode_json_parsed["duration"]
-                    episode.url = f"https://youtu.be/{episode.id}"
+                    episode.url = f"https://youtu.be/{episode.episode_id}"
 
                     date = datetime.strptime(episode_json_parsed["upload_date"], "%Y%m%d").astimezone()
                     episode.air_date = date
