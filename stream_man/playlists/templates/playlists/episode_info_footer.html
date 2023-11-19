@@ -3,9 +3,9 @@
 {% endcomment %}
 {% load playlist_tags %}
 {% block "title" %}
-    <a href="{% url 'media:show' show_id=episode.season.show.id %}">{{ episode.season.show.name }}</a> >
-    <a href="{% url 'media:season' season_id=episode.season.id %}">{{ episode.season.number }}. {{ episode.season.name }}</a> >
-    <a href="{% url 'media:episode' episode_id=episode.id %}">{{ episode.number }}. {{ episode.name }}</a>
+    <a href="{% url 'admin:media_show_change' episode.season.show.id %}">{{ episode.season.show.name }}</a> >
+    <a href="{% url 'admin:media_season_change' episode.season.id %}">{{ episode.season.name }}</a> >
+    <a href="{% url 'admin:media_episode_change' episode.id %}">{{ episode.name }}</a>
 {% endblock "title" %}
 {% block "body" %}
     <div class="row">
