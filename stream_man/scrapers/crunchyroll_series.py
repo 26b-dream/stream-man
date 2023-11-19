@@ -33,9 +33,9 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
 
     def any_file_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
         output = self.show_json_or_show_seasons_json_outdated(minimum_timestamp)
-        output = self.any_season_json_file_outdated(minimum_timestamp)
-        output = self.show_image_missing()
-        output = self.any_episode_image_missing()
+        output = self.any_season_json_file_outdated(minimum_timestamp) or output
+        output = self.show_image_missing() or output
+        output = self.any_episode_image_missing() or output
         return output
 
     def show_json_or_show_seasons_json_outdated(self, minimum_timestamp: Optional[datetime] = None) -> bool:
