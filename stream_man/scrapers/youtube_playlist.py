@@ -122,11 +122,21 @@ class YouTubePlaylist(ScraperShowShared, AbstractScraperClass):
             self.show_json_path.write(raw_json)
             self.show_json_path.parsed_cached_value = json.loads(raw_json)
 
+    def video_deleted(self, video_entry: dict[str, Any]) -> bool:
+        """Check if a video has been deleted"""
+        # Video title can be "[Deleted video]" or "[Private video]", but it looks like view_count will always be None
+        # and will only ever be None for deleted videos
+        return video_entry["view_count"] is None
+
     def download_episodes(self, minimum_timestamp: Optional[datetime] = None) -> None:
         if self.episode_files_outdated(minimum_timestamp):
             # Go through each video in the playlist
             for x in self.show_json_path.parsed_cached()["entries"]:
                 episode_json_path = self.episode_json_path(x["id"])
+
+                # Ignore deleted videos
+                if self.video_deleted(x):
+                    continue
 
                 if not episode_json_path.exists():
                     logging.getLogger(self.logger_identifier() + "Downloading Episode Information").info(x["title"])
@@ -146,6 +156,10 @@ class YouTubePlaylist(ScraperShowShared, AbstractScraperClass):
     def download_episode_images(self, page: Page) -> None:
         """Download a specific image using playwright if it does not exist"""
         for partial_episode in self.show_json_path.parsed_cached()["entries"]:
+            # Ignore deleted videos
+            if self.video_deleted(partial_episode):
+                continue
+
             episode_json_parsed = self.episode_json_path(partial_episode["id"]).parsed_cached()
             image_url = self.image_url_from_dict(episode_json_parsed)
             image_path = self.image_path_from_dict(episode_json_parsed)
