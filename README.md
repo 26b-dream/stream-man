@@ -1,2 +1,2 @@
 # stream-man
-  Single user version of stream manager 
+Self hosted media tracking application.

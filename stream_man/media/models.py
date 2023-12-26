@@ -5,7 +5,7 @@ from datetime import date
 from typing import Any, Optional
 
 from django.db import models
-from django_model_helpers import GetOrNew, ModelWithIdAndTimestamp, auto_unique
+from great_django_family import GetOrNew, ModelWithIdAndTimestamp, auto_unique
 
 
 class Show(ModelWithIdAndTimestamp, GetOrNew):

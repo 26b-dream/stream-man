@@ -1,57 +1,47 @@
-[tool.black]
-line-length = 120
-
-[tool.isort]
-profile = "black"
-line_length = 120
-
-[tool.pylint]
-disable = [
-    "C0301", # line-too-long: Black makes this redundant
-    "E1101", # no-member: Black makes thie redundant and it sometimes has false positives
-    "E0307", # invalid-str-returned: Black makes this redundant and it sometimes has false positives
-    "E0611", # invalid-str-returned: Black makes this redundant and it sometimes has false positives
-    "E0401", # import-error: Black makes this redundant and it has false positives because it does not use PYTHONPATH
-    "C0114", # missing-module-docstring: So often these are just useless, only add them when they are useful
-    "C0115", # missing-class-docstring: So often these are just useless, only add them when they are useful
-    "C0116", # missing-function-docstring: So often these are just useless, only add them when they are useful
-    "E0601", # used-before-assignment: Pylance is more reliable because Pylint does not understand "if TYPE_CHECKING:"
-]
-
 [tool.poetry]
-name = "stream_man"
-version = "0.0.1"
-description = "Single user version of stream manager"
-authors = ["26b_dream <1@1.1>"]
+name = "stream-man"
+version = "0.1.0"
+description = "Self hosted media tracking application."
+authors = ["ryn-cx <84663588+ryn-cx@users.noreply.github.com>"]
+license = "GNU AGPLv3"
 readme = "README.md"
-license = "AGPL-3.0-only"
 
 [tool.poetry.dependencies]
-python = "^3.8.1"
-django = "^4.2"
-django-types = "^0.17.0"
-playwright = "^1.34"
-playwright-stealth = "^1.0.5"
+python = "^3.11"
+great-django-family = { git = "https://github.com/ryn-cx/great-django-family" }
+html-file = { git = "https://github.com/ryn-cx/html-file" }
+json-file = { git = "https://github.com/ryn-cx/json-file" }
+pillow = "^10.1.0"
+cryptography = "^41.0.7"
+sorl-thumbnail = "^12.10.0"
+playwright = "^1.40.0"
+playwright-stealth = "^1.0.6"
+django = "^5.0"
+djlint = "^1.34.1"
 
-django_model_helpers = { git = "https://github.com/ryn-cx/django-model-helpers" }
-json_file = { git = "https://github.com/ryn-cx/json-file" }
-html_file = { git = "https://github.com/ryn-cx/html-file" }
-pillow = "^9.5.0"
-cryptography = "^41.0.1"
-pytest = "^7.4.0"
-sorl-thumbnail = "^12.9.0"
-
-[tool.poetry.group.dev]
-optional = true
 
 [tool.poetry.group.dev.dependencies]
-black = "^23.3.0"
-isort = "^5.12.0"
-flake8 = "^6.0.0"
-pytest = "^7.3.1"
-pylint = "^2.17.4"
-pylint-django = "^2.5.3"
+ruff = "^0.1.9"
+pre-commit = "^3.6.0"
+pylint = "^3.0.3"
+pytest = "^7.4.3"
+django-types = "^0.19.1"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["ANN101", "ANN102", "N804"]
+# ANN101 - missing-type-self - self doesn't need type hints because the type is known implicitly
+# ANN102 - missing-type-cls - cls doesn't need type hints because the type is known implicitly
+# N804 - non-pep604-annotation - Sometimes has false positives, and Pylance is more accurate
+
+[tool.ruff.extend-per-file-ignores]
+"test_*.py" = ["S101", "INP001"]
+# S101 - assert - Assert statements are fine in tests
+# INP001 - implicit-namespace-package - Tests are not packages and should not have __init__.py files
