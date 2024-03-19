@@ -1,8 +1,13 @@
-# Data files
+# Project specific files
+credentials.encrypted
+credentials.json
 downloaded_files
 images
 
-# Mac files
+# Poetry specific
+poetry.lock
+
+# Mac specific
 .DS_Store
 
 ##################################################################
