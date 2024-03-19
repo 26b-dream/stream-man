@@ -1,32 +1,53 @@
-"""Models for the media app"""
+"""Models for the media app."""
 from __future__ import annotations
 
-from datetime import date
-from typing import Any, Optional
+from datetime import date, datetime
+from typing import TYPE_CHECKING, Any
 
+from common.constants import DOWNLOADED_FILES_DIR
 from django.db import models
-from great_django_family import GetOrNew, ModelWithIdAndTimestamp, auto_unique
+from great_django_family import ModelWithId, ModelWithIdTimestampAndGetOrNew, auto_unique
+
+from stream_man.settings import MEDIA_ROOT
+
+if TYPE_CHECKING:
+    from paved_path import PavedPath
 
 
-class Show(ModelWithIdAndTimestamp, GetOrNew):
-    """Model that stores information for a show"""
+class ModelImageSaver(models.Model):
+    """Model that has an image and an easy way to save it."""
+
+    image = models.ImageField(upload_to="images", null=True, blank=True)
+
+    class Meta:  # type: ignore  # noqa: PGH003, D106 - Meta has false positives
+        abstract = True
+
+    def set_image(self, image_path: PavedPath) -> None:
+        """Set the image for a model object and hardlink the image so it can be easily accessed through Django."""
+        pretty_name = image_path.relative_to(DOWNLOADED_FILES_DIR)
+
+        self.image.name = str(pretty_name)
+
+        # Hardlink the file so it can be served through the server easier
+        media_path = MEDIA_ROOT / pretty_name
+        if not media_path.exists():
+            media_path.parent.mkdir(parents=True, exist_ok=True)
+            media_path.hardlink_to(image_path)
+
+
+class Show(ModelImageSaver, ModelWithIdTimestampAndGetOrNew):
+    """Model for a show."""
 
     season_set: models.QuerySet[Season]
-
-    class Meta:  # pyright: ignore [reportIncompatibleVariableOverride]
-        ordering = ["name"]
-
-        constraints = [auto_unique("website", "show_id")]
 
     website = models.CharField(max_length=255)
     show_id = models.CharField(max_length=255)
     """Unique show identifier from the website"""
     name = models.CharField(max_length=256)
     # Sometimes media types are not specified, or movies and TV shows will be mixed together
-    #   Crunchyroll mixese movies and TV shows together
+    #   Crunchyroll mixes movies and TV shows together
     media_type = models.CharField(max_length=256, blank=True)
     description = models.TextField(blank=True)
-    image = models.ImageField(upload_to="images", null=True, blank=True)
     url = models.CharField(max_length=255, null=False)
     favicon_url = models.CharField(max_length=255)
     # Null is allowed because you often need to import the Show before the episodes, but update_at is calculated based
@@ -34,29 +55,33 @@ class Show(ModelWithIdAndTimestamp, GetOrNew):
     update_at = models.DateTimeField(null=True, blank=True)
     deleted = models.BooleanField()
 
+    class Meta:  # type: ignore  # noqa: PGH003, D106 - Meta has false positives
+        constraints = (auto_unique("website", "show_id"),)
+        ordering = ("name",)
+
     def __str__(self) -> str:
+        """Show represented as a string."""
         return self.name
 
-    # https://www.youtube.com/playlist?list=UULFpFFItkfZz1qz5PpHpqzYBw
-    # https://www.youtube.com/playlist?list=A_rK2tAIFLA&list=UULFMX31RavkfUHJvw03RbUZnA
-
     def last_watched_date(self) -> date:
-        """Date that an episode was last watched"""
+        """Date that an episode was last watched."""
         episode_info = EpisodeWatch.objects.filter(episode=self).order_by("watch_date").last()
         if episode_info:
             return episode_info.watch_date
-        else:
-            return date.fromtimestamp(0)
+
+        # If not episode info is found return the earliest possible date
+        return datetime.fromtimestamp(0).astimezone().date()
 
     def newest_episode_date(self) -> date:
-        """Release date of the newest episode"""
+        """Release date of the newest episode."""
         if episode := Episode.objects.filter(season__show=self).order_by("release_date").last():
             return episode.release_date
-        else:
-            return date.fromtimestamp(0)
+
+        # If not episode info is found return the earliest possible date
+        return datetime.fromtimestamp(0).astimezone().date()
 
     def dump(self) -> dict[str, Any]:
-        """Dump all of the information for a show as json"""
+        """Dump all of the information for a show as json."""
         variables = vars(self).copy()
         # State is just junk information when it comes to serialization
         variables.pop("_state")
@@ -72,34 +97,34 @@ class Show(ModelWithIdAndTimestamp, GetOrNew):
         return variables
 
 
-class Season(ModelWithIdAndTimestamp, GetOrNew):
-    """Model that stores information for a season of a show"""
+class Season(ModelImageSaver, ModelWithIdTimestampAndGetOrNew):
+    """Model for a Season."""
 
     episode_set: models.QuerySet[Episode]
-
-    class Meta:  # pyright: ignore [reportIncompatibleVariableOverride]
-        constraints = [auto_unique("show", "season_id")]
-        ordering = ["show", "sort_order"]
 
     show = models.ForeignKey(Show, on_delete=models.CASCADE)
     season_id = models.CharField(max_length=64)
     """Unique season identifier from the website"""
     # Some websites say things like "P1" or "S1", so this value must be stored as a CharField and a seperate value needs
     # to be stored to track the order seasons appear on a website
-    # TODO: I think this was Netflix, need to have an example of this
+    # I think this was Netflix, need to have an example of this, will have to double check later
     name = models.CharField(max_length=64)
     sort_order = models.PositiveSmallIntegerField()
     number = models.PositiveSmallIntegerField()
     """The order that seasons are sorted on the original website"""
-    image = models.ImageField(upload_to="images", null=True, blank=True)
     url = models.CharField(max_length=255)
     deleted = models.BooleanField()
 
+    class Meta:  # type: ignore  # noqa: PGH003, D106 - Meta has false positives
+        constraints = (auto_unique("show", "season_id"),)
+        ordering = ("show", "sort_order")
+
     def __str__(self) -> str:
+        """Season represented as a string."""
         return self.name
 
     def dump(self) -> dict[str, Any]:
-        """Dump all of the information for a show as json"""
+        """Dump all of the information for a season as json."""
         variables = vars(self).copy()
         # State is just junk information when it comes to serialization
         variables.pop("_state")
@@ -114,12 +139,8 @@ class Season(ModelWithIdAndTimestamp, GetOrNew):
         return variables
 
 
-class Episode(ModelWithIdAndTimestamp, GetOrNew):
-    """Model that stores information for an episode of a season of a show on"""
-
-    class Meta:  # pyright: ignore [reportIncompatibleVariableOverride]
-        constraints = [auto_unique("season", "episode_id")]
-        ordering = ["season", "sort_order"]
+class Episode(ModelImageSaver, ModelWithIdTimestampAndGetOrNew):
+    """Model for an episode."""
 
     season = models.ForeignKey(Season, on_delete=models.CASCADE)
     episode_id = models.CharField(max_length=64)
@@ -134,34 +155,42 @@ class Episode(ModelWithIdAndTimestamp, GetOrNew):
     characters"""
     sort_order = models.PositiveSmallIntegerField(null=True)
     """The order that episodes are sorted on the website"""
-    image = models.ImageField(upload_to="images", null=True, blank=True)
     description = models.TextField()
     release_date = models.DateTimeField()
     """The date that the episode was made available for streaming, this value is useful for determining when to update a
     series"""
     air_date = models.DateTimeField()
-    """THe date that the episode originally aired, this is the value that will be displayed to the user"""
+    """The date that the episode originally aired, this is the value that will be displayed to the user"""
     duration = models.PositiveSmallIntegerField()
     """Duration stored in number of seconds"""
     deleted = models.BooleanField()
 
+    class Meta:  # type: ignore  # noqa: PGH003, D106 - Meta has false positives
+        constraints = (auto_unique("season", "episode_id"),)
+        ordering = ("season", "sort_order")
+
     def __str__(self) -> str:
+        """Episode represented as a string."""
         return self.name
 
     def is_watched(self) -> bool:
-        """Check if an episode has been watched"""
+        """If an episode has been watched."""
         return EpisodeWatch.objects.filter(episode=self).exists()
 
     def watch_count(self) -> int:
-        """The number of times an episode has been watched"""
+        """Return the number of times an episode has been watched."""
         return EpisodeWatch.objects.filter(episode=self).count()
 
     def last_watched(self) -> date:
-        """Wehn an episode was last watched"""
-        return EpisodeWatch.objects.filter(episode=self).last().watch_date
+        """When an episode was last watched."""
+        if episode := EpisodeWatch.objects.filter(episode=self).last():
+            return episode.watch_date
 
-    def next_episode(self) -> Optional[Episode]:
-        """The episode that is after this one chronologicaly"""
+        msg = "The episode was never watched"
+        raise ValueError(msg)
+
+    def next_episode(self) -> Episode | None:
+        """Episode that is after the current one chronologicaly."""
         episodes = Episode.objects.filter(
             season__show=self.season.show,
             season__sort_order__gte=self.season.sort_order,
@@ -170,7 +199,7 @@ class Episode(ModelWithIdAndTimestamp, GetOrNew):
         return episodes.first()
 
     def dump(self) -> dict[str, Any]:
-        """Dump all of the information for a show as json"""
+        """Dump all of the information for an episode as json."""
         variables = vars(self).copy()
         # State is just junk information when it comes to serialization
         variables.pop("_state")
@@ -183,34 +212,46 @@ class Episode(ModelWithIdAndTimestamp, GetOrNew):
         variables["release_date"] = self.release_date.isoformat()
         return variables
 
+    def set_image(self, image_path: PavedPath) -> None:
+        """Set the image for a model object and hardlink the image so it can be easily accessed through Django."""
+        pretty_name = image_path.relative_to(DOWNLOADED_FILES_DIR)
 
-class EpisodeWatch(models.Model):
-    """Model that tracks every time an episode is watched"""
+        self.image.name = str(pretty_name)
 
-    class Meta:  # pyright: ignore [reportIncompatibleVariableOverride]
-        # Technically you can watch an episode more than once in a single day
-        # It's far more likely to accidently mark an episode as watched twice in the same day
-        # Adding a unique constraint here will avoid the possibility of accidently double-watching an episode
-        constraints = [auto_unique("episode", "watch_date")]
+        # Hardlink the file so it can be served through the server easier
+        media_path = MEDIA_ROOT / pretty_name
+        if not media_path.exists():
+            media_path.parent.mkdir(parents=True, exist_ok=True)
+            media_path.hardlink_to(image_path)
 
-        ordering = ["watch_date"]
 
-    id = models.AutoField(primary_key=True)
+class EpisodeWatch(ModelWithId):
+    """Model for logging when an episode is watched."""
+
     episode = models.ForeignKey(Episode, on_delete=models.CASCADE)
-    watch_date = models.DateField()
+    watch_date = models.DateTimeField()
+
+    class Meta:  # type: ignore  # noqa: PGH003, D106 - Meta has false positives
+        ordering = ("watch_date",)
 
     def __str__(self) -> str:
+        """EpisodeWatch represented as a string."""
         return f"{self.watch_date} - {self.episode}"
 
 
-class UpdateQue(models.Model):
-    """Some websites have a calendar that can be used for updating show information
+class UpdateQue(ModelWithId):
+    """Track when the information for an entire website was last updated.
 
-    This model will track when the calendar was last used to update information"""
+    This is useful on website that have a calendar or a clear list of new content that can easily be scraped to
+    determine when a show needs to be updated.
+    """
 
-    class Meta:  # pyright: ignore [reportIncompatibleVariableOverride]
-        constraints = [auto_unique("website")]
+    class Meta:  # type: ignore  # noqa: PGH003, D106 - Meta has false positives
+        constraints = (auto_unique("website"),)
 
-    id = models.AutoField(primary_key=True)
     website = models.CharField(max_length=256)
     next_update_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        """UpdateQue represented as a string."""
+        return f"{self.website} - {self.next_update_at}"
