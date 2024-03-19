@@ -1,21 +1,26 @@
+"""Manage credentials for the scrapers."""
 # I don't usually copy and paste code but encrypting secrets is one of the few situations where I will take a snippet
 # written by somone else that has been vetted by the community
 # See: https://stackoverflow.com/questions/2490334/simple-way-to-encode-a-string-according-to-a-password
+from __future__ import annotations
+
 import json
 import secrets
 from base64 import urlsafe_b64decode as b64d
 from base64 import urlsafe_b64encode as b64e
 from getpass import getpass
-from typing import Optional
 
-from common.constants import BASE_DIR
 from cryptography.fernet import Fernet
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
+from common.constants import BASE_DIR
+
 
 class Credentials:
+    """Manage credentials for the scrapers."""
+
     credentials: dict[str, dict[str, str]] = {}
 
     BACKEND = default_backend()
@@ -25,7 +30,17 @@ class Credentials:
     password = ""
 
     @classmethod
-    def login(cls, hardcoded_password: Optional[str] = None):
+    def login(cls, hardcoded_password: str | None = None) -> None:
+        """Login to the credentials manager.
+
+        Parameters:
+        ----------
+        hardcoded_password (str | None): The password to use. If None, the user will be prompted for a password.
+
+        Returns:
+        -------
+        None
+        """
         if hardcoded_password:
             cls.password = hardcoded_password
         else:
@@ -33,7 +48,17 @@ class Credentials:
 
     @classmethod
     def _derive_key(cls, salt: bytes, iterations: int = ITERATIONS) -> bytes:
-        """Derive a secret key from a given password and salt"""
+        """Derive a secret key from a given password and salt.
+
+        Parameters:
+        ----------
+        salt (bytes): The salt to use.
+        iterations (int): The number of iterations to use.
+
+        Returns:
+        -------
+        bytes: The derived key.
+        """
         kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=iterations, backend=cls.BACKEND)
         return b64e(kdf.derive(cls.password.encode()))
 
@@ -60,26 +85,63 @@ class Credentials:
 
     @classmethod
     def save_credentials(cls, credentials: dict[str, dict[str, str]]) -> None:
-        """Save credentials to disk"""
+        """Encrypt and save credentials to disk. Will append to existing credentials.
+
+        Parameters:
+        ----------
+        credentials (dict[str, dict[str, str]]): The credentials to save.
+
+        Returns:
+        -------
+        None
+        """
         dumped_credentials = json.dumps(credentials)
         encrypted_credentials = cls._password_encrypt(dumped_credentials.encode())
         cls.CREDENTIALS_FILE.write(encrypted_credentials)
 
     @classmethod
     def dump_credentials(cls, credentials: dict[str, dict[str, str]]) -> None:
-        """Dump UNENCRYPTED credentials to disk"""
+        """Dump UNENCRYPTED credentials to disk. Useful for debugging credentials.
+
+        Parameters:
+        ----------
+        credentials (dict[str, dict[str, str]]): The credentials to dump.
+
+        Returns:
+        -------
+        None
+        """
         dumped_credentials = json.dumps(credentials)
         cls.UNENCRYPTED_CREDENTIALS_FILE.write(dumped_credentials)
 
     @classmethod
-    def import_credentials(cls) -> None:
-        """Dump UNENCRYPTED credentials to disk"""
+    def replace_credentials(cls) -> None:
+        """Import and REPLACE exisintg credentials from disk. Useful for debugging credentials.
+
+        Parameters:
+        ----------
+        None
+
+        Returns:
+        -------
+        None
+        """
         loaded_credentials = cls.UNENCRYPTED_CREDENTIALS_FILE.read_text()
         encrypted_credentials = cls._password_encrypt(loaded_credentials.encode())
         cls.CREDENTIALS_FILE.write(encrypted_credentials)
 
     @classmethod
     def load_credentials(cls) -> dict[str, dict[str, str]]:
+        """Load credentials from disk.
+
+        Parameters:
+        ----------
+        None
+
+        Returns:
+        -------
+        dict[str, dict[str, str]]: The credentials.
+        """
         encrypted_credential = cls.CREDENTIALS_FILE.read_bytes()
         decrypted_credentials = cls._password_decrypt(encrypted_credential)
         cls.credentials = json.loads(decrypted_credentials)
