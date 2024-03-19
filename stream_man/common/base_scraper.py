@@ -89,7 +89,7 @@ class ScraperShowShared(ABC):
         self._show_seasons_json_file = JSONFile(self._files_dir, "Data", f"Show Seasons ({self._show_id}).json")
         self._movie_json_file = JSONFile(self._files_dir, "Data", f"Movie ({self._show_id}).json")
 
-        # TODO: is this workaround still needed?
+        # ? Is this workaround still needed?
         if not TYPE_CHECKING:
             self._season_json_file = functools.cache(self._season_json_file)
             self._image_file_from_url = functools.cache(self._image_file_from_url)
