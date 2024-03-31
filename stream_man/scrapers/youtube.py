@@ -108,7 +108,7 @@ class YouTube(BaseScraper, AbstractScraperClass):
         return self._any_episode_image_missing() or output
 
     def _show_files_outdated(self) -> bool:
-        return self._logged_file_outdated(self._show_json_file, "Show JSON", self._show_update_at_timestamp())
+        return self._logged_file_outdated(self._show_json_file, "Show JSON", self._show_update_at())
 
     def _episode_files_outdated(self) -> bool:
         output = False
@@ -173,7 +173,7 @@ class YouTube(BaseScraper, AbstractScraperClass):
                 if self._episode_deleted(episode):
                     continue
 
-                timestamp = self._episode_update_at_timestamp(self._show_id, episode["id"])
+                timestamp = self._episode_update_at(self._show_id, episode["id"])
                 if episode_json_path.is_outdated(timestamp):
                     self._logger("Downloading Episode Information").info(episode["url"])
                     command = [

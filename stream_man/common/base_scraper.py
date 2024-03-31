@@ -129,17 +129,17 @@ class BaseScraper(ABC):
 
         return self._show_dir / "image" / f"{image_id}.{extension}"
 
-    def _show_update_at_timestamp(self) -> datetime | None:
+    def _show_update_at(self) -> datetime | None:
         return self.show_object.checked_update_at()
 
-    def _season_update_at_timestamp(self, season_id: str) -> datetime | None:
+    def _season_update_at(self, season_id: str | int) -> datetime | None:
         # Check if show_object is saved
         if self.show_object.pk:
             temp_season = Season.objects.get_or_new(season_id=season_id, show=self.show_object)[0]
             return temp_season.checked_update_at()
         return None
 
-    def _episode_update_at_timestamp(self, season_id: str, episode_id: str) -> datetime | None:
+    def _episode_update_at(self, season_id: str, episode_id: str) -> datetime | None:
         # Check if show_object is saved
         if self.show_object.pk:
             temp_season = Season.objects.get_or_new(season_id=season_id, show=self.show_object)[0]

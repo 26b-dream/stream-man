@@ -70,7 +70,7 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
 
         output = False
         for season in self._show_seasons_json_file.parsed_cached()["data"]:
-            timestamp = self._season_update_at_timestamp(season["id"])
+            timestamp = self._season_update_at(season["id"])
             if self._logged_file_outdated(self._season_json_file(season["id"]), "Season JSON", timestamp):
                 output = True
 
@@ -126,7 +126,7 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
             # networkidle hangs forever, use
             page.goto(self._show_url, wait_until="load")
             files = (self._show_json_file, self._show_seasons_json_file)
-            page.wait_for_files(files, self._show_update_at_timestamp())
+            page.wait_for_files(files, self._show_update_at())
 
     def _download_seasons(self, page: BeerShaker) -> None:
         show_seasons_json_parsed = self._show_seasons_json_file.parsed_cached()
@@ -134,7 +134,7 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
             season_json_file = self._season_json_file(show_season["id"])
             season_id = show_season["id"]
 
-            if season_json_file.is_outdated(self._season_update_at_timestamp(season_id)):
+            if season_json_file.is_outdated(self._season_update_at(season_id)):
                 # All season pages have to be downloaded from the show page so open the show page
                 # Only do this one time, all later pages can reuse existing page
                 if self._show_url not in page.url:
@@ -151,7 +151,7 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
                     self._logger("Clicking Season").info(season_id)
                     self._season_button(page, show_season).click()
 
-                page.wait_for_files(season_json_file, self._season_update_at_timestamp(season_id))
+                page.wait_for_files(season_json_file, self._season_update_at(season_id))
 
     def _download_show_image(self, page: BeerShaker) -> None:
         image_url = self._strict_image_url(self._show_json_file, "poster_wide")
