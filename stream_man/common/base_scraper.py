@@ -113,9 +113,9 @@ class BaseScraper(ABC):
     def _image_file_from_url(
         self,
         image_url: str,
+        subfolder: str | None = None,
         image_id: str | None = None,
         extension: str | None = None,
-        subfolder: str | None = None,
     ) -> PavedPath:
         """Get the image file as a PavedPath object from its URL, or by using a specific ID and extension."""
         image_name = image_url.split("/")[-1]
@@ -148,13 +148,13 @@ class BaseScraper(ABC):
                 return temp_episode.checked_update_at()
         return None
 
-    def _favicon_file_outdated(self) -> bool:
+    def _favicon_outdated(self, timestamp: datetime | None = None) -> bool:
         """Check if the favicon is outdated.
 
         This function is a bit uneccessary but it helps keep the favicon checking methods consistent.
         """
         # Favicons shouldn't really need updates so set it to never update
-        return self._logged_file_outdated(self._favicon_file, "Favicon")
+        return self._logged_file_outdated(self._favicon_file, timestamp)
 
     def _logger(self, child: str | None = None) -> logging.Logger:
         """Logger instance that contains the website and show name."""
@@ -162,15 +162,14 @@ class BaseScraper(ABC):
         logger = logging.getLogger(self._website_name).getChild(show_name)
         return logger.getChild(child) if child else logger
 
-    def _logged_file_outdated(self, file: PavedPath, name: str, timestamp: datetime | None = None) -> bool:
+    def _logged_file_outdated(self, file: PavedPath, timestamp: datetime | None = None) -> bool:
         """Check if a file exists and log if it is outdated."""
-        if output := file.is_outdated(timestamp):
-            if not file.exists():
-                self._logger().info(f"{name} is missing")
-            else:
-                self._logger().info(f"{name} is outdated")
+        if file.is_outdated(timestamp):
+            relative_file_name = file.relative_to(self._website_dir)
+            self._logger(file.file_status).info(relative_file_name)
+            return True
 
-        return output
+        return False
 
     def update(
         self,
@@ -186,26 +185,30 @@ class BaseScraper(ABC):
             minimum_info_timestamp: Download new information if the stored information is older than this.
             minimum_modified_timestamp: Import information if the stored information was last modified before this.
         """
-        self._logger().info("Updating")
-        self._download_all()
+        self._logger().info("Checking")
+        if self._any_file_outdated():
+            self._logger().info("Downloading")
+            self._download_all()
         self._import_all(minimum_modified_timestamp)
 
     def _download_image_if_outdated(
         self,
         page: BeerShaker,
         url: str,
-        file: PavedPath,
-        string: str | None,
+        file: PavedPath | None = None,
         timestamp: datetime | None = None,
     ) -> None:
         """Download an image if it does not exist using BeerShaker."""
-        if file.is_outdated(timestamp):
-            self._logger(f"Downloading {string}").info(url)
+        if file is None:
+            file = self._image_file_from_url(url)
+
+        if self._logged_file_outdated(file, timestamp):
+            self._logger("Downloading").info(url)
             page.download_image(file, url)
 
-    def _download_favicon_if_outdated(self, page: BeerShaker) -> None:
+    def _download_favicon_if_oudated(self, page: BeerShaker, timestamp: datetime | None = None) -> None:
         """Download the favicon for the website."""
-        if self._favicon_file_outdated():
+        if self._favicon_outdated(timestamp):
             self._logger("Downloading").info("Favicon")
             page.download_favicon(self.DOMAIN, self._favicon_file)
 

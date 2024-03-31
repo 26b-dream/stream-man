@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import urllib.request
 from time import sleep
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 from playwright.sync_api._generated import Page, Playwright
 from playwright_stealth import stealth_sync  # type: ignore  # noqa: PGH003 - Stubs won't generate for some reason
@@ -19,8 +19,7 @@ if TYPE_CHECKING:
     from html_file import HTMLFile
     from json_file import JSONFile
     from paved_path import PavedPath
-    from playwright._impl._api_structures import Position
-    from playwright.sync_api._generated import BrowserContext, ElementHandle, Locator, Response
+    from playwright.sync_api._generated import BrowserContext, Response
 
 logger = logging.getLogger(__name__)
 

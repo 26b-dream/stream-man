@@ -25,22 +25,22 @@ if TYPE_CHECKING:
 class YouTube(BaseScraper, AbstractScraperClass):
     """Plugin to support YouTube playlists.
 
-    For now using this plugin requires yt-dlp in the PATH.
+    For now using this plugin requires yt-dlp in the system PATH.
     """
 
     WEBSITE = "YouTube"
     DOMAIN = "https://www.youtube.com"
 
-    # Example channel URL
+    # Example channel URL:
     #   https://www.youtube.com/@DiscoveryWalkingToursTV
     CHANNEL_URL_REGEX = re.compile(rf"^{re.escape(DOMAIN)}\/@(?P<show_id>.*?)(?:$)")
 
-    # Example playlist URLs
+    # Example playlist URLs:
     #   https://www.youtube.com/playlist?list=PLSGAdUaWI73FQd0gWRj2GP9Ruln7HvEtq
     #   https://www.youtube.com/watch?v=nYfum3RdpuI&list=UULFL5_yRx9ujWPqH2lwD5d5_w
     PLAYLIST_URL_REGEX = re.compile(rf"^{re.escape(DOMAIN)}.*?list=(?P<show_id>.*?)(?:$|&)")
 
-    # Combined regex for both channel and playlist URLs
+    # Combined regex for both channel and playlist URLs.
     URL_REGEX = re.compile(rf"^{re.escape(DOMAIN)}(?:.*?list=|\/@)(?P<show_id>.*?)(?:$|&)")
 
     @override
@@ -53,47 +53,45 @@ class YouTube(BaseScraper, AbstractScraperClass):
         elif re.search(self.PLAYLIST_URL_REGEX, show_url):
             self.type = "Playlist"
             self._show_url = f"{self.DOMAIN}/playlist?list={self._show_id}"
+        # The only way this happens is if PLAYLIST_URL_REGEX or CHANNEL_URL_REGEX is modified and URL_REGEX is not
+        # updated.
         else:
             error_message = f"Invalid URL: {show_url}"
             raise ValueError(error_message)
 
-        # Replace existing show_object to include if this is a plylist or a channel. This is done just in case a
+        # Replace existing show_object to include if this is a playlist or a channel. This is done just in case a
         # playlist and a channel can share an ID.
         website_name = f"{self._website_name} {self.type}"
         self.show_object = Show.objects.get_or_new(show_id=self._show_id, website=website_name)[0]
 
     @cached_property
     @override
-    def _show_json_file(self) -> JSONFile:
-        # Add in the type of the show to the file name.
-        # This is done just in case playlists and channels can share an ID.
-        return JSONFile(self._website_dir, self.type, f"{self._show_id}.json")
+    def _show_dir(self) -> PavedPath:
+        # Make all shows to share a folder so episodes can all be grouped together. That way playlists and channels that
+        # share videos do not take up more space than necessary.
+        return self._website_dir
 
     @cached_property
     @override
-    def _show_dir(self) -> PavedPath:
-        # Force all shows to share a folder so episodes can all be grouped together
-        return self._website_dir
+    def _show_json_file(self) -> JSONFile:
+        # Add in the type of the show to the file name.
+        # This is done just in case playlists and channels can share an ID.
+        return JSONFile(self._website_dir, self.type.lower(), f"{self._show_id}.json")
 
     def _episode_image_file(self, data: dict[str, Any]) -> PavedPath:
         # Can't cache this in any meaningful way because the parameter is a dictionary
         # Image file names are not unique so the name needs to be based on the episode ID or show ID
-        # ? Can't remember why this is formatted like this
-        episode_id = data["id"]
-        if data.get("thumbnail"):
-            img_suffix = data["thumbnail"].split(".")[-1]
-        else:
-            img_suffix = data["thumbnails"][-1]["url"].split(".")[-1].split("?")[0]
-        return (self._website_dir / "image" / "episode" / episode_id).with_suffix(f".{img_suffix}")
+        suffix = self._episode_image_url(data).split(".")[-1].split("?")[0]
+        return self._website_dir / "image" / "episode" / f"{data['id']}.{suffix}"
 
-    def _get_episode_image_url(self, data: dict[str, Any]) -> str:
+    def _episode_image_url(self, data: dict[str, Any]) -> str:
         # Can't cache this in any meaningful way because the parameter is a dictionary
         """Get the URL for the image.
 
         Args:
             data: The dictionary that contains the information for the episode.
         """
-        # ? Can't remember why this is formatted like this
+        # TODO: What does this check do?
         if data.get("thumbnail"):
             return data["thumbnail"]
 
@@ -101,55 +99,56 @@ class YouTube(BaseScraper, AbstractScraperClass):
 
     @override
     def _any_file_outdated(self) -> bool:
-        self._logger().info("Checking for outdated files")
-        output = self._favicon_file_outdated()
-        output = self._show_files_outdated() or output
-        output = self._episode_files_outdated() or output
-        return self._any_episode_image_missing() or output
+        return (
+            self._favicon_outdated()
+            or self._show_json_outdated()
+            or self._any_episode_json_outdated()
+            or self._any_episode_image_missing()
+        )
 
-    def _show_files_outdated(self) -> bool:
-        return self._logged_file_outdated(self._show_json_file, "Show JSON", self._show_update_at())
+    def _show_json_outdated(self) -> bool:
+        return self._logged_file_outdated(self._show_json_file, self._show_update_at())
 
-    def _episode_files_outdated(self) -> bool:
-        output = False
+    def _any_episode_json_outdated(self) -> bool:
         if self._show_json_file.exists():
             for episode_entry in self._episode_list():
-                episode_json_file = self._episode_json_file(episode_entry["id"])
-                file_name = f"Episode JSON {episode_entry['id']}"
-                # There is no reason to update this file so set the timestamp to None
-                output = self._logged_file_outdated(episode_json_file, file_name) or output
-        return output
+                if self._episode_json_outdated(episode_entry):
+                    return True
+        return False
+
+    def _episode_json_outdated(self, episode_entry: dict[str, Any]) -> bool:
+        episode_json_file = self._episode_json_file(episode_entry["id"])
+        timestamp = self._episode_update_at(self._show_id, episode_entry["id"])
+        return self._logged_file_outdated(episode_json_file, timestamp)
 
     def _any_episode_image_missing(self) -> bool:
-        output = False
         if self._show_json_file.exists():
             for episode_entry in self._episode_list():
                 episode_json_file = self._episode_json_file(episode_entry["id"])
                 if episode_json_file.exists():
                     image_path = self._episode_image_file(episode_json_file.parsed_cached())
-                    file_name = f"Episode Image {episode_entry['id']}"
                     # There is no reason to update this file so set the timestamp to none
-                    output = self._logged_file_outdated(image_path, file_name) or output
+                    if self._logged_file_outdated(image_path):
+                        return True
 
-        return output
+        return False
 
     @override
     def _download_all(self) -> None:
-        if self._any_file_outdated():
-            self._download_show_if_outdated()
-            self._download_episode_if_outdated()
+        self._download_show_if_outdated()
+        self._download_episodes_if_outdated()
 
-            # I don't actually need to use Playwrite since this just downloads images, but the code is already there and
-            # easy to re-use
-            with sync_playwright() as playwright:
-                page = BeerShaker(playwright)
-                self._download_episode_images(page)
-                self._download_favicon_if_outdated(page)
-                page.close()
+        # I don't actually need to use Playwrite since this just downloads images, but the code is already there and
+        # easy to re-use
+        with sync_playwright() as playwright:
+            page = BeerShaker(playwright)
+            self._download_episode_images_if_missing(page)
+            self._download_favicon_if_oudated(page)
+            page.close()
 
     def _download_show_if_outdated(self) -> None:
-        if self._show_files_outdated():
-            self._logger("Downloading Show Information").info(self._show_url)
+        if self._show_json_outdated():
+            self._logger("Downloading").info(self._show_url)
             # Run external yt-dl and capture stdout and stderr
             command = [
                 "yt-dlp",
@@ -158,47 +157,37 @@ class YouTube(BaseScraper, AbstractScraperClass):
                 self._show_url,
             ]
 
-            # This error is just inconsistent, the URL is already verified to be a YouTube URL so it should be safe to
+            # This linter is just inconsistent, the URL is already verified to be a YouTube URL so it should be safe to
             # run the process
             raw_json = subprocess.run(command, capture_output=True, check=True).stdout.decode("utf-8")  # noqa: S603
             self._show_json_file.write(raw_json)
 
-    def _download_episode_if_outdated(self) -> None:
-        if self._episode_files_outdated():
-            # Go through each video in the playlist
-            for episode in self._episode_list():
-                episode_json_path = self._episode_json_file(episode["id"])
+    def _download_episodes_if_outdated(self) -> None:
+        # Go through each video in the playlist
+        for episode in self._episode_list():
+            episode_json_path = self._episode_json_file(episode["id"])
 
-                # No information to gain by downloading it so just ignore it
-                if self._episode_deleted(episode):
-                    continue
+            if self._episode_json_outdated(episode):
+                self._logger("Downloading").info(episode["url"])
+                command = [
+                    "yt-dlp",
+                    "--ignore-errors",  # Ignore errors because private/deleted videos will cause errors
+                    "--dump-single-json",  # Dump all output as a single json file
+                    "--skip-download",  # Do not download the videos, just get the information
+                    episode["url"],
+                ]
+                # TODO: An error occurs if a scheduled video has not yet premiered
+                # TODO: Use this information to predict when the next udpate should be
+                # Subprocess is secure as possible because the URL comes directly from yt-dlp
+                raw_json = subprocess.run(command, capture_output=True, check=True).stdout.decode("utf-8")  # noqa: S603
+                episode_json_path.write(raw_json)
 
-                timestamp = self._episode_update_at(self._show_id, episode["id"])
-                if episode_json_path.is_outdated(timestamp):
-                    self._logger("Downloading Episode Information").info(episode["url"])
-                    command = [
-                        "yt-dlp",
-                        "--ignore-errors",  # Ignore errors because private/deleted videos will cause errors
-                        "--dump-single-json",  # Dump all output as a single json file
-                        "--skip-download",  # Do not download the videos, just get the information
-                        episode["url"],
-                    ]
-                    # TODO: An error occurs if a scheduled video has not yet premiered
-                    # TODO: Use this information to predict when the next udpate should be
-                    # Subprocess is secure as possible because the URL comes directly from yt-dlp
-                    raw_json = subprocess.run(command, capture_output=True, check=True).stdout.decode("utf-8")  # noqa: S603
-                    episode_json_path.write(raw_json)
-
-    def _download_episode_images(self, page: BeerShaker) -> None:
+    def _download_episode_images_if_missing(self, page: BeerShaker) -> None:
         for partial_episode in self._episode_list():
-            # No information to gain by downloading it so just ignore it
-            if self._episode_deleted(partial_episode):
-                continue
-
             episode_json_parsed = self._episode_json_file(partial_episode["id"]).parsed_cached()
-            image_url = self._get_episode_image_url(episode_json_parsed)
+            image_url = self._episode_image_url(episode_json_parsed)
             image_path = self._episode_image_file(episode_json_parsed)
-            self._download_image_if_outdated(page, image_url, image_path, "Episode Image")
+            self._download_image_if_outdated(page, image_url, image_path)
 
     def _episode_deleted(self, episode_entry: dict[str, Any]) -> bool:
         # Video title can be "[Deleted video]" or "[Private video]", but it looks like view_count will always be None

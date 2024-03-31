@@ -44,11 +44,14 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
     @cached_property
     def _show_image_file(self) -> PavedPath:
         """Show image file."""
-        return self._image_file_from_url(self._show_image_url, "Show")
+        return self._image_file_from_url(self._show_image_url, "show")
 
     def _episode_image_file(self, season_file: JSONFile, episode_index: int) -> PavedPath | None:
-        url = self._image_url(season_file, "thumbnail", episode_index)
-        return self._show_dir / "image" / "episode" / url.split("/")[-1] if url else None
+        url = self._episode_image_url(season_file, episode_index)
+        return self._image_file_from_url(url, "episode") if url else None
+
+    def _episode_image_url(self, season_file: JSONFile, episode_index: int) -> str | None:
+        return self._image_url(season_file, "thumbnail", episode_index)
 
     @override
     def _any_file_outdated(self) -> bool:
@@ -61,74 +64,71 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
 
     def _show_json_or_show_seasons_json_outdated(self) -> bool:
         timestamp = self.show_object.checked_update_at()
-        output = self._logged_file_outdated(self._show_json_file, "Show JSON", timestamp)
-        return self._logged_file_outdated(self._show_seasons_json_file, "Show Seasons JSON", timestamp) or output
+        return self._logged_file_outdated(self._show_json_file, timestamp) or self._logged_file_outdated(
+            self._show_seasons_json_file,
+            timestamp,
+        )
 
     def _any_season_json_outdated(self) -> bool:
         if not self._show_seasons_json_file.exists():
             return False
 
-        output = False
         for season in self._show_seasons_json_file.parsed_cached()["data"]:
+            file = self._season_json_file(season["id"])
             timestamp = self._season_update_at(season["id"])
-            if self._logged_file_outdated(self._season_json_file(season["id"]), "Season JSON", timestamp):
-                output = True
+            if self._logged_file_outdated(file, timestamp):
+                return True
 
-        return output
+        return False
 
     def _show_image_missing(self) -> bool:
         if not self._show_json_file.exists():
             return True
 
-        image_url = self._strict_image_url(self._show_json_file, "poster_wide")
-        image_path = self._image_file_from_url(image_url, "Show")
         # By default images should never need to be updated
-        return self._logged_file_outdated(image_path, "Show Image")
+        return self._logged_file_outdated(self._show_image_file)
 
     def _any_episode_image_missing(self) -> bool:
         if not self._show_seasons_json_file.exists():
             return True
 
-        output = False
         for show_season in self._show_seasons_json_file.parsed_cached()["data"]:
             if not self._season_json_file(show_season["id"]).exists():
                 return True
             season_json_file = self._season_json_file(show_season["id"])
             season_json_parsed = season_json_file.parsed_cached()
             for i, _episode_parsed in enumerate(season_json_parsed["data"]):
-                if image_url := self._image_url(season_json_file, "thumbnail", i):
-                    image_file = self._image_file_from_url(image_url, f"Episode {i}")
-                    output = self._logged_file_outdated(image_file, "Show Image") or output
+                if image_file := self._episode_image_file(season_json_file, i):  # noqa: SIM102 - Ugly
+                    if self._logged_file_outdated(image_file):
+                        return True
 
-        return output
+        return False
 
     @override
     def _download_all(self) -> None:
-        if self._any_file_outdated():
-            self._logger().info("Downloading")
-            with sync_playwright() as playwright:
-                # Create a new page that will autoamtically save JSON files when they are requested
-                page = BeerShaker(playwright)
-                page.on("response", self._save_playwright_files)
+        with sync_playwright() as playwright:
+            # Create a new page that will autoamtically save JSON files when they are requested
+            page = BeerShaker(playwright)
+            page.on("response", self._save_playwright_files)
 
-                self._download_show(page)
-                self._download_seasons(page)
+            self._download_show_if_outdated(page)
+            self._download_seasons_if_outdated(page)
 
-                page.enable_image_download_mode()
-                self._download_show_image(page)
-                self._download_episode_images(page)
+            self._download_show_image_if_missing(page)
+            self._download_episode_images_if_missing(page)
+            self._download_favicon_if_oudated(page)
 
-                page.close()
+            page.close()
 
-    def _download_show(self, page: BeerShaker) -> None:
+    def _download_show_if_outdated(self, page: BeerShaker) -> None:
         if self._show_json_or_show_seasons_json_outdated():
-            self._logger("Downloading Show").info(self._show_url)
+            self._logger("Opening").info(self._show_url)
             # networkidle hangs forever, use
             page.goto(self._show_url, wait_until="load")
             files = (self._show_json_file, self._show_seasons_json_file)
             page.wait_for_files(files, self._show_update_at())
 
-    def _download_seasons(self, page: BeerShaker) -> None:
+    def _download_seasons_if_outdated(self, page: BeerShaker) -> None:
         show_seasons_json_parsed = self._show_seasons_json_file.parsed_cached()
         for show_season in show_seasons_json_parsed["data"]:
             season_json_file = self._season_json_file(show_season["id"])
@@ -138,7 +138,7 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
                 # All season pages have to be downloaded from the show page so open the show page
                 # Only do this one time, all later pages can reuse existing page
                 if self._show_url not in page.url:
-                    self._logger("Opening Show Page For Seasons").info(self._show_url)
+                    self._logger("Opening").info(self._show_url)
                     page.goto(self._show_url, wait_until="networkidle")
 
                 # Season selector only exists for shows with multiple seasons
@@ -153,25 +153,23 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
 
                 page.wait_for_files(season_json_file, self._season_update_at(season_id))
 
-    def _download_show_image(self, page: BeerShaker) -> None:
-        image_url = self._strict_image_url(self._show_json_file, "poster_wide")
-        image_path = self._image_file_from_url(image_url, "Show")
-        self._download_image_if_outdated(page, image_url, image_path, "Show Image")
+    def _download_show_image_if_missing(self, page: BeerShaker) -> None:
+        self._download_image_if_outdated(page, self._show_image_url, self._show_image_file)
 
-    def _download_episode_images(self, page: BeerShaker) -> None:
+    def _download_episode_images_if_missing(self, page: BeerShaker) -> None:
         for show_season in self._show_seasons_json_file.parsed_cached()["data"]:
             season_json_file = self._season_json_file(show_season["id"])
             season_json_parsed = season_json_file.parsed_cached()
 
             for i, _episode_parsed in enumerate(season_json_parsed["data"]):
-                if image_file := self._episode_image_file(season_json_file, i):
-                    image_url = self._strict_image_url(season_json_file, "thumbnail", i)
-                    self._download_image_if_outdated(page, image_url, image_file, "Episode Image")
+                if image_url := self._episode_image_url(season_json_file, i):
+                    image_path = self._episode_image_file(season_json_file, i)
+                    self._download_image_if_outdated(page, image_url, image_path)
 
     def _save_playwright_files(self, response: Response) -> None:
         """Save specific files from the response recieved by playwright."""
         # Example URL: https://www.crunchyroll.com/content/v2/cms/series/GEXH3W4JP?locale=en-US
-        re_domain = re.escape(self.DOMAIN)
+        re_domain = re.escape(self.DOMAIN)  # Stops lines from being too long
         show_regex = re.compile(rf"^{re_domain}\/content\/v2\/cms\/series\/(?P<show_id>.*?)\?")
 
         # Example URL: https://www.crunchyroll.com/content/v2/cms/series/GEXH3W4JP/seasons?locale=en-US
@@ -216,7 +214,6 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
             self.show_object.media_type = "Series"
             self.show_object.name = parsed_json["title"]
             self.show_object.description = parsed_json["description"]
-            self.show_object.set_image(self._show_image_file)
             self.show_object.set_image(self._show_image_file)
             self.show_object.set_favicon(self._favicon_file)
             self.show_object.deleted = False
@@ -267,11 +264,9 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
                     episode_info.url = f"{self.DOMAIN}/watch/{episode_parsed['id']}"
 
                     strp = "%Y-%m-%dT%H:%M:%S%z"
+                    available_date = episode_parsed["premium_available_date"]
                     episode_info.air_date = datetime.strptime(episode_parsed["episode_air_date"], strp).astimezone()
-                    episode_info.release_date = datetime.strptime(
-                        episode_parsed["premium_available_date"],
-                        strp,
-                    ).astimezone()
+                    episode_info.release_date = datetime.strptime(available_date, strp).astimezone()
                     # Every now and then a show just won't have thumbnails and the thumbnail will be added a few weeks
                     # later, see: https://beta.crunchyroll.com/series/G79H23VD4/im-kodama-kawashiri
                     if image_path := self._episode_image_file(season_json_file, i):

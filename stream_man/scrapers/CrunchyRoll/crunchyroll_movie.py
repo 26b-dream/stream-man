@@ -59,47 +59,47 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
 
     @override
     def _any_file_outdated(self) -> bool:
-        output = self._movie_json_outdated()
-        output = self._movie_image_missing() or output
-        output = self._episode_image_missing() or output
-        return self._favicon_file_outdated() or output
+        return (
+            self._movie_json_outdated()
+            or self._movie_image_missing()
+            or self._episode_image_missing()
+            or self._favicon_outdated()
+        )
 
     def _movie_json_outdated(self) -> bool:
         timestamp = self.show_object.checked_update_at()
-        output = self._logged_file_outdated(self._movie_json_file, "Movie JSON", timestamp)
-        return self._logged_file_outdated(self._movie_2_json_file, "Movie 2 JSON", timestamp) or output
+        return self._logged_file_outdated(self._movie_json_file, timestamp) or self._logged_file_outdated(
+            self._movie_2_json_file, timestamp
+        )
 
     def _movie_image_missing(self) -> bool:
-        timestamp = self.show_object.checked_update_at()
         if not self._movie_2_json_file.exists():
             return False
 
-        return self._logged_file_outdated(self._movie_image_file, "Movie Image", timestamp)
+        # Images should never be automatically updated
+        return self._logged_file_outdated(self._movie_image_file)
 
     def _episode_image_missing(self) -> bool:
-        timestamp = self.show_object.checked_update_at()
         if not self._movie_json_file.exists():
             return False
 
-        return self._logged_file_outdated(self._episode_image_file, "Episode Image", timestamp)
+        # Images should never be automatically updated
+        return self._logged_file_outdated(self._episode_image_file)
 
     @override
     def _download_all(self) -> None:
-        if self._any_file_outdated():
-            self._logger().info("Downloading")
-            with sync_playwright() as playwright:
-                page = BeerShaker(playwright)
-                self._download_movie_jsons_if_outdated(page)
-                self._download_image_if_outdated(page, self._movie_image_url, self._movie_image_file, "Movie Image")
-                string = "Episode Image"
-                self._download_image_if_outdated(page, self._episode_image_url, self._episode_image_file, string)
-                self._download_favicon_if_outdated(page)
-                page.close()
+        with sync_playwright() as playwright:
+            page = BeerShaker(playwright)
+            self._download_movie_jsons_if_outdated(page)
+            self._download_image_if_outdated(page, self._movie_image_url, self._movie_image_file)
+            self._download_image_if_outdated(page, self._episode_image_url, self._episode_image_file)
+            self._download_favicon_if_oudated(page)
+            page.close()
 
     def _download_movie_jsons_if_outdated(self, page: BeerShaker) -> None:
         if self._movie_json_outdated():
             page.on("response", self._save_playwright_files)
-            self._logger("Downloading").getChild("Movie JSON Files").info(self._show_url)
+            self._logger("Downloading").info(self._show_url)
             page.goto(self._show_url, wait_until="load")
             files = (self._movie_json_file, self._movie_2_json_file)
             page.wait_for_files(files, self.show_object.checked_update_at())
@@ -131,7 +131,8 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
             self.show_object.set_image(self._movie_image_file)
             self.show_object.set_favicon(self._favicon_file)
             self.show_object.deleted = False
-            self.show_object.add_timestamps_and_save(self._movie_image_file.aware_mtime())
+            min_timestamp = min(self._movie_json_file.aware_mtime(), self._movie_2_json_file.aware_mtime())
+            self.show_object.add_timestamps_and_save(min_timestamp)
 
     @override
     def _import_seasons(
@@ -147,7 +148,7 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
             season.number = 0
             season.name = "Movie"
             season.deleted = False
-            season.add_timestamps_and_save(self._movie_json_file.aware_mtime())
+            season.add_timestamps_and_save(self.show_object.info_timestamp)
 
     @override
     def _import_episodes(
@@ -179,7 +180,7 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
 
             # No seperate file for episodes so just use the season file
             episode.deleted = False
-            episode.add_timestamps_and_save(season.info_timestamp)
+            episode.add_timestamps_and_save(self.show_object.info_timestamp)
 
     @override
     def _set_update_at(self) -> None:
