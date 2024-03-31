@@ -162,7 +162,10 @@ class BaseScraper(ABC):
     def _logged_file_outdated(self, file: PavedPath, name: str, timestamp: datetime | None = None) -> bool:
         """Check if a file exists and log if it is outdated."""
         if output := file.is_outdated(timestamp):
-            self._logger().info(f"{name} is outdated")
+            if not file.exists():
+                self._logger().info(f"{name} is missing")
+            else:
+                self._logger().info(f"{name} is outdated")
 
         return output
 
