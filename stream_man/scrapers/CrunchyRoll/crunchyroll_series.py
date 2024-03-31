@@ -48,7 +48,7 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
 
     def _episode_image_file(self, season_file: JSONFile, episode_index: int) -> PavedPath | None:
         url = self._image_url(season_file, "thumbnail", episode_index)
-        return self._show_dir / "Image" / "Episode" / url.split("/")[-1] if url else None
+        return self._show_dir / "image" / "episode" / url.split("/")[-1] if url else None
 
     @override
     def _any_file_outdated(self) -> bool:

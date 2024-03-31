@@ -75,22 +75,22 @@ class BaseScraper(ABC):
 
     @cached_property
     def _favicon_file(self) -> PavedPath:
-        return PavedPath(self._website_dir, "Favicon.png")
+        return PavedPath(self._website_dir, "favicon.png")
 
     @cached_property
     def _show_json_file(self) -> JSONFile:
-        return JSONFile(self._show_dir, "Show.json")
+        return JSONFile(self._show_dir, "show.json")
 
     @cached_property
     def _show_seasons_json_file(self) -> JSONFile:
-        return JSONFile(self._show_dir, "ShowSeasons.json")
+        return JSONFile(self._show_dir, "show_seasons.json")
 
     @cached_property
     def _movie_json_file(self) -> JSONFile:
-        return JSONFile(self._show_dir, "Movie.json")
+        return JSONFile(self._show_dir, "movie.json")
 
     def _episode_json_file(self, episode_id: str) -> JSONFile:
-        return JSONFile(self._show_dir / f"Episode/{episode_id}.json")
+        return JSONFile(self._show_dir / f"episode/{episode_id}.json")
 
     def _season_json_file(
         self,
@@ -98,11 +98,11 @@ class BaseScraper(ABC):
         page: int | None = None,
     ) -> JSONFile:
         # For simplciity, create the season_string as a string then voncert it to a JSONFile object
-        season_string = f"Season/{season_id}"
+        season_string = f"season/{season_id}"
 
         # Page numbers aren't needed for all files, so only add them when needed
         if page is not None:
-            season_string += f"/Page/{page}"
+            season_string += f"/page/{page}"
 
         # This is the main reason a JSONFile is not created immediately, there is no easy way to append to a file path
         # without casting it to a string anyways so it makes more sense just to create the string as a string
@@ -125,9 +125,9 @@ class BaseScraper(ABC):
             extension = image_name.split(".")[-1]
 
         if subfolder:
-            return self._show_dir / "Image" / subfolder / f"{image_id}.{extension}"
+            return self._show_dir / "image" / subfolder / f"{image_id}.{extension}"
 
-        return self._show_dir / "Image" / f"{image_id}.{extension}"
+        return self._show_dir / "image" / f"{image_id}.{extension}"
 
     def _show_update_at_timestamp(self) -> datetime | None:
         return self.show_object.checked_update_at()

@@ -38,7 +38,7 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
 
     @cached_property
     def _movie_2_json_file(self) -> JSONFile:
-        return JSONFile(self._show_dir, "Movie2.json")
+        return JSONFile(self._show_dir, "movie_2.json")
 
     @cached_property
     def _episode_image_url(self) -> str:

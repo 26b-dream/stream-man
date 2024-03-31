@@ -84,7 +84,7 @@ class YouTube(BaseScraper, AbstractScraperClass):
             img_suffix = data["thumbnail"].split(".")[-1]
         else:
             img_suffix = data["thumbnails"][-1]["url"].split(".")[-1].split("?")[0]
-        return (self._website_dir / "Image" / "Episode" / episode_id).with_suffix(f".{img_suffix}")
+        return (self._website_dir / "image" / "episode" / episode_id).with_suffix(f".{img_suffix}")
 
     def _get_episode_image_url(self, data: dict[str, Any]) -> str:
         # Can't cache this in any meaningful way because the parameter is a dictionary
