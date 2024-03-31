@@ -70,11 +70,9 @@ class CrunchyrollSeries(CrunchyRollShared, AbstractScraperClass):
 
         output = False
         for season in self._show_seasons_json_file.parsed_cached()["data"]:
-            if self.show_object.pk:
-                temp_season = Season.objects.get_or_new(season_id=season["id"], show=self.show_object)[0]
-                timestamp = temp_season.checked_update_at()
-                if self._logged_file_outdated(self._season_json_file(season["id"]), "Season JSON", timestamp):
-                    output = True
+            timestamp = self._season_update_at_timestamp(season["id"])
+            if self._logged_file_outdated(self._season_json_file(season["id"]), "Season JSON", timestamp):
+                output = True
 
         return output
 
