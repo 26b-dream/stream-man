@@ -149,14 +149,17 @@ class BaseScraper(ABC):
         return None
 
     def _favicon_file_outdated(self) -> bool:
-        """Check if the favicon is outdated."""
+        """Check if the favicon is outdated.
+
+        This function is a bit uneccessary but it helps keep the favicon checking methods consistent.
+        """
         # Favicons shouldn't really need updates so set it to never update
         return self._logged_file_outdated(self._favicon_file, "Favicon")
 
     def _logger(self, child: str | None = None) -> logging.Logger:
         """Logger instance that contains the website and show name."""
-        name = self.show_object.name or self._show_id
-        logger = logging.getLogger(__name__).getChild(self._website_name).getChild(name)
+        show_name = self.show_object.name or self._show_id
+        logger = logging.getLogger(self._website_name).getChild(show_name)
         return logger.getChild(child) if child else logger
 
     def _logged_file_outdated(self, file: PavedPath, name: str, timestamp: datetime | None = None) -> bool:
