@@ -6,7 +6,8 @@ from django.http import HttpRequest
 from django.urls import reverse
 from media.forms import MarkEpisodeWatchedForm
 from media.models import Episode  # For some reason putting this under TYPE_CHECKING causes an error
-from playlists.forms import PlaylistSortForm
+
+from playlists.forms import PlaylistFilterForm
 from playlists.models import Playlist
 
 register = template.Library()
@@ -39,11 +40,11 @@ def playlist_filter_json(playlist: Playlist) -> str:
     except (TypeError, json.JSONDecodeError):
         filter_json = {}
 
-    form = PlaylistSortForm(filter_json)
+    form = PlaylistFilterForm(filter_json)
 
     # If the default filter saved in the database is invalid use the initial values instead
     if not form.is_valid():
-        filter_json = PlaylistSortForm.initial_values()
+        filter_json = PlaylistFilterForm.initial_values()
         filter_json["playlist"] = playlist.id
 
     return json.dumps(filter_json)

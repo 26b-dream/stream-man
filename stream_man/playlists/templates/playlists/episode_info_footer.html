@@ -29,16 +29,16 @@
                     <strong>Duration:</strong> {{ episode.duration|seconds_to_time }}
                 </li>
             </ul>
-            <button onclick="move_card_to_top('card-{{ episode.id }}')"
+            <button onclick="moveCardToTop({{ episode.id }})"
                     type="button"
                     class="btn btn-primary">Top</button>
-            <button onclick="move_card_up('card-{{ episode.id }}')"
+            <button onclick="moveCardUp({{ episode.id }})"
                     type="button"
                     class="btn btn-primary">Up</button>
-            <button onclick="move_card_down('card-{{ episode.id }}')"
+            <button onclick="moveCardDown({{ episode.id }})"
                     type="button"
                     class="btn btn-primary">Down</button>
-            <button onclick="move_card_to_bottom('card-{{ episode.id }}')"
+            <button onclick="moveCardToBottom({{ episode.id }})"
                     type="button"
                     class="btn btn-primary">Bottom</button>
         </div>
@@ -66,7 +66,7 @@
                 {% comment %} Mark as watched then open the next episode in the list {% endcomment %}
                 <button class="btn btn-primary"
                         hx-post="{% url 'media:forms/mark_episode_watched' episode.id %}"
-                        hx-on="htmx:afterRequest: click_next_card('card-{{ episode.id }}');"
+                        hx-on="htmx:afterRequest: clickNextCard({{ episode.id }});"
                         hx-include="#episode-watched-form">Next</button>
                 {% comment %} If there is an episode directly follwing this episode from the same show have a special
                 button that will mark the current episode as watched and open the episode footer for the next episode
@@ -78,9 +78,9 @@
                             hx-include="#episode-watched-form">Continue</button>
                 {% endif %}
                 <button class="btn btn-info"
-                        onclick="click_prev_card('card-{{ episode.id }}');">Previous</button>
+                        onclick="clickPrevCard({{ episode.id }}); return false;">Previous</button>
                 <button class="btn btn-info"
-                        onclick="click_next_card('card-{{ episode.id }}');">Skip</button>
+                        onclick="clickNextCard({{ episode.id }}); return false;">Skip</button>
                 <button hx-vals='{"deleted":"on"}'
                         class="btn btn-danger"
                         hx-post="{% url 'media:forms/mark_episode_watched' episode.id %}"

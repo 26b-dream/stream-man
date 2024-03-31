@@ -1,4 +1,4 @@
-"""Django app config for the media app."""
+"""Django apps for the media app."""
 from django.apps import AppConfig
 
 

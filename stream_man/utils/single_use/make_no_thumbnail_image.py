@@ -1,5 +1,5 @@
 """Use pillow to make an image that says "No Thumbnail"."""
-import _activate_django  # pyright: ignore[reportUnusedImport] # pylint: disable=W0611
+import _activate_django  # pyright: ignore[reportUnusedImport]  # noqa: F401
 from common.constants import BASE_DIR
 from PIL import Image, ImageDraw, ImageFont
 

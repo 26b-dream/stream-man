@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 class MarkEpisodeWatchedForm(forms.ModelForm):
     """Form for marking an episode as watched."""
 
-    class Meta:  # type: ignore  # noqa: PGH003, D106 - Meta has false positives
+    class Meta:  # type: ignore[reportIncompatibleVariableOverride] # noqa: D106 - Meta has false positives
         model = EpisodeWatch
         fields = ("episode", "watch_date")
         widgets: ClassVar = {

@@ -6,7 +6,7 @@
   <form>
     {% csrf_token %}
     {{ form }}
-    <button hx-post="{% url 'playlists:forms/new_playlist/submit' %}"
+    <button hx-post="{% url 'playlists:forms/new_playlist' %}"
             hx-target="#htmx-footer">Create Playlist</button>
   </form>
 {% endblock "body" %}

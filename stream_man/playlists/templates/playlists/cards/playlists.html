@@ -4,7 +4,11 @@
         <div id="card-{{ playlist.id }}"
              class="col-auto"
              style="width: 20%"
-             onclick="DoubleClickV2('card-{{ playlist.id }}', htmx.ajax, {% playlist_card_url_1_params request playlist %}, window.open, {% playlist_card_url_2_params request playlist %})">
+             playlist-id="{{ playlist.id }}"
+             class="btn btn-primary"
+             {% comment %} hx-get="{% url 'playlists:playlist' playlist.id %}" {% endcomment %}
+             onClick="window.location.href='{% url 'playlists:playlist' playlist.id %}'"
+             >
             <div class="card text-wrap">
                 <img src="{{ playlist.thumbnail_url }}" class="card-img-top">
                 <div class="card-body">

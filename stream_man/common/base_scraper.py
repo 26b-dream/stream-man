@@ -1,16 +1,17 @@
-"""Shared code for scrapers."""
-
+"""Contains ScraperShowShared."""
 from __future__ import annotations
 
 import functools
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
+from functools import cached_property
 from typing import TYPE_CHECKING
 
 from django.db import transaction
 from json_file import JSONFile
 from media.models import Episode, Season, Show
+from paved_path import PavedPath
 
 import common.extended_re as re
 from common.constants import DOWNLOADED_FILES_DIR
@@ -18,235 +19,259 @@ from common.constants import DOWNLOADED_FILES_DIR
 if TYPE_CHECKING:
     from re import Pattern
 
-    from paved_path import PavedPath
-
     from common.scraper_functions import BeerShaker
 
 
-class ScraperShowShared(ABC):
+# If you import AbstractScraperClass and ABC at the same time the class will still show up when using
+# AbstractScraperClass.__subclasses__() so don't subclass AbstractScraperClass in this class
+class BaseScraper(ABC):
     """Shared code for scraping show information."""
 
     URL_REGEX: Pattern[str]
-    """Regex pattern used to match the show URL."""
     WEBSITE: str
-    """The name of the website."""
-
-    @classmethod
-    def website_name(cls) -> str:
-        """Name of the website.
-
-        This may seem redundant, but it is useful for when a scraper supports multiple websites.
-
-        Returns:
-        -------
-        str: The name of the website.
-        """
-        return cls.WEBSITE
+    DOMAIN: str
 
     @classmethod
     def is_valid_show_url(cls, show_url: str) -> bool:
-        """Check if a URL is a valid show URL for a specific scraper.
-
-        Parameters:
-        ----------
-        show_url (str): The URL to check.
-
-        Returns:
-        -------
-        bool: True if the URL is a valid show URL, False otherwise.
-        """
-        return bool(re.search(cls.URL_REGEX, show_url))
-
-    @abstractmethod
-    def _download_all(
-        self,
-        minimum_timestamp: datetime | None = None,
-    ) -> None:
-        """Download all of the information if it is outdated or missing.
-
-        Parameters:
-        -----------
-        minimum_timestamp (datetime | None): The minimum timestamp for files to be downloaded.
-
-        Returns:
-        --------
-        None
-        """
-
-    def __init__(self, show_url: str) -> None:
-        """Initializes a Scraper.
+        # This docstring is just copied from AbstractScraperClass
+        """Check if the given URL is a valid show URL for the scraper.
 
         Args:
-            show_url (str): The URL of the show.
+            show_url: The URL to check.
 
         Returns:
-            None
+            True if the URL is valid, False if the URL is not valid for the scraper.
         """
-        self._show_id = str(re.strict_search(self.URL_REGEX, show_url).group("show_id"))
-        self._show = Show.objects.get_or_new(show_id=self._show_id, website=self.WEBSITE)[0]
-        self._files_dir = DOWNLOADED_FILES_DIR / self.WEBSITE / self._show_id
-        self._show_json_file = JSONFile(self._files_dir, "Data", f"Show ({self._show_id}).json")
-        self._show_seasons_json_file = JSONFile(self._files_dir, "Data", f"Show Seasons ({self._show_id}).json")
-        self._movie_json_file = JSONFile(self._files_dir, "Data", f"Movie ({self._show_id}).json")
+        return bool(re.search(cls._url_regex(), show_url))
 
-        # ? Is this workaround still needed?
-        if not TYPE_CHECKING:
-            self._season_json_file = functools.cache(self._season_json_file)
-            self._image_file_from_url = functools.cache(self._image_file_from_url)
+    @classmethod
+    def _url_regex(cls) -> Pattern[str]:
+        """Regex used to determine if the URL is valid."""
+        return cls.URL_REGEX
+
+    def __init__(self, show_url: str) -> None:
+        """Initializes a Scraper object for a specific show from a specific website."""
+        self._show_id = str(re.strict_search(self._url_regex(), show_url).group("show_id"))
+        self.show_object = Show.objects.get_or_new(show_id=self._show_id, website=self._website_name)[0]
+        self._initialize_cache()
+
+    def _initialize_cache(self) -> None:
+        """Initialize the cache for the files so they are only loaded once."""
+        self._season_json_file = functools.cache(self._season_json_file)
+        self._image_file_from_url = functools.cache(self._image_file_from_url)
+        self._episode_json_file = functools.cache(self._episode_json_file)
+
+    @cached_property
+    def _website_name(self) -> str:
+        return self.WEBSITE
+
+    @cached_property
+    def _website_dir(self) -> PavedPath:
+        return DOWNLOADED_FILES_DIR / self._website_name
+
+    @cached_property
+    def _show_dir(self) -> PavedPath:
+        return self._website_dir / self._show_id
+
+    @cached_property
+    def _favicon_file(self) -> PavedPath:
+        return PavedPath(self._website_dir, "Favicon.png")
+
+    @cached_property
+    def _show_json_file(self) -> JSONFile:
+        return JSONFile(self._show_dir, "Show.json")
+
+    @cached_property
+    def _show_seasons_json_file(self) -> JSONFile:
+        return JSONFile(self._show_dir, "ShowSeasons.json")
+
+    @cached_property
+    def _movie_json_file(self) -> JSONFile:
+        return JSONFile(self._show_dir, "Movie.json")
+
+    def _episode_json_file(self, episode_id: str) -> JSONFile:
+        return JSONFile(self._show_dir / f"Episode/{episode_id}.json")
 
     def _season_json_file(
         self,
-        season_name: int | str,
-        season_id: str | int | None = None,
+        season_id: int | str,
         page: int | None = None,
     ) -> JSONFile:
-        """Get the JSON file for a season.
-
-        You can have a season without a unique identfier, but you will always have a season name because there must be
-        some way to refer to the season.
-
-        Parameters:
-        -----------
-        season_name (int | str): The name of the season.
-        season_id (str | int | None): The ID of the season.
-        page (int | None): The page number of the season.
-
-        Returns:
-        --------
-        JSONFile: The JSON file for the season.
-        """
-        # If the season name changes that should be fine because show and seasons are updated in batches at the same
-        # time
-        season_string = f"Season {season_name} ({season_id})" if season_id else f"Season {season_name}"
+        # For simplciity, create the season_string as a string then voncert it to a JSONFile object
+        season_string = f"Season/{season_id}"
 
         # Page numbers aren't needed for all files, so only add them when needed
         if page is not None:
-            season_string += f"/Page {page}"
+            season_string += f"/Page/{page}"
 
-        # Append extension manually just in case the id contains a period in it
+        # This is the main reason a JSONFile is not created immediately, there is no easy way to append to a file path
+        # without casting it to a string anyways so it makes more sense just to create the string as a string
         season_string += ".json"
 
-        return JSONFile(self._files_dir, "Data", season_string)
+        return JSONFile(self._show_dir, season_string)
 
-    def logger(self, child: str | None = None) -> logging.Logger:
-        """Logger instance that contains the website and show name.
+    def _image_file_from_url(
+        self,
+        image_url: str,
+        image_id: str | None = None,
+        extension: str | None = None,
+        subfolder: str | None = None,
+    ) -> PavedPath:
+        """Get the image file as a PavedPath object from its URL, or by using a specific ID and extension."""
+        image_name = image_url.split("/")[-1]
+        if image_id is None:
+            image_id = image_name.split(".")[0]
+        if extension is None:
+            extension = image_name.split(".")[-1]
 
-        Parameters:
-        -----------
-        child (str | None): The name of the child logger to create. If None, the logger will be for the show itself.
+        if subfolder:
+            return self._show_dir / "Image" / subfolder / f"{image_id}.{extension}"
 
-        Returns:
-        --------
-        logging.Logger: The logger instance for the show or a child of the show logger
-        """
-        name = self._show.name or self._show_id
-        logger = logging.getLogger(__name__).getChild(self.WEBSITE).getChild(name)
+        return self._show_dir / "Image" / f"{image_id}.{extension}"
 
+    def _show_update_at_timestamp(self) -> datetime | None:
+        return self.show_object.checked_update_at()
+
+    def _season_update_at_timestamp(self, season_id: str) -> datetime | None:
+        # Check if show_object is saved
+        if self.show_object.pk:
+            temp_season = Season.objects.get_or_new(season_id=season_id, show=self.show_object)[0]
+            return temp_season.checked_update_at()
+        return None
+
+    def _episode_update_at_timestamp(self, season_id: str, episode_id: str) -> datetime | None:
+        # Check if show_object is saved
+        if self.show_object.pk:
+            temp_season = Season.objects.get_or_new(season_id=season_id, show=self.show_object)[0]
+            if temp_season.pk:
+                temp_episode = Episode.objects.get_or_new(episode_id=episode_id, season=temp_season)[0]
+                return temp_episode.checked_update_at()
+        return None
+
+    def _favicon_file_outdated(self) -> bool:
+        """Check if the favicon is outdated."""
+        # Favicons shouldn't really need updates so set it to never update
+        return self._logged_file_outdated(self._favicon_file, "Favicon")
+
+    def _logger(self, child: str | None = None) -> logging.Logger:
+        """Logger instance that contains the website and show name."""
+        name = self.show_object.name or self._show_id
+        logger = logging.getLogger(__name__).getChild(self._website_name).getChild(name)
         return logger.getChild(child) if child else logger
+
+    def _logged_file_outdated(self, file: PavedPath, name: str, timestamp: datetime | None = None) -> bool:
+        """Check if a file exists and log if it is outdated."""
+        if output := file.is_outdated(timestamp):
+            self._logger().info(f"{name} is outdated")
+
+        return output
 
     def update(
         self,
-        minimum_info_timestamp: datetime | None = None,
         minimum_modified_timestamp: datetime | None = None,
     ) -> None:
-        """Download and update the information for the entire show.
+        # This docstring is just copied from AbstractScraperClass
+        """Download and update the information for an entire show.
 
-        If files are older than the minimum_info_timestamp, they will be downloaded.
-        If information in the database is older than the minimum_modified_timestamp, it will be updated.
+        If data is older than the minimum_info_timestamp it will be updated.
+        If the data in the database is older than the minimum_modified_timestamp, it will be updated.
 
-        Parameters
-        ----------
-        minimum_info_timestamp (datetime | None): The minimum timestamp for files to be downloaded.
-        minimum_modified_timestamp (datetime | None): The minimum timestamp for information to be updated.
-
-        Returns:
-        -------
-        None
+        Args:
+            minimum_info_timestamp: Download new information if the stored information is older than this.
+            minimum_modified_timestamp: Import information if the stored information was last modified before this.
         """
-        self.logger().info("Updating")
-        self._download_all(minimum_info_timestamp)
-        self._import_all(minimum_info_timestamp, minimum_modified_timestamp)
+        self._logger().info("Updating")
+        self._download_all()
+        self._import_all(minimum_modified_timestamp)
+
+    def _download_image_if_outdated(
+        self,
+        page: BeerShaker,
+        url: str,
+        file: PavedPath,
+        string: str | None,
+        timestamp: datetime | None = None,
+    ) -> None:
+        """Download an image if it does not exist using BeerShaker."""
+        if file.is_outdated(timestamp):
+            self._logger(f"Downloading {string}").info(url)
+            page.download_image(file, url)
+
+    def _download_favicon_if_outdated(self, page: BeerShaker) -> None:
+        """Download the favicon for the website."""
+        if self._favicon_file_outdated():
+            self._logger("Downloading").info("Favicon")
+            page.download_favicon(self.DOMAIN, self._favicon_file)
 
     @transaction.atomic
     def _import_all(
         self,
-        minimum_info_timestamp: datetime | None = None,
         minimum_modified_timestamp: datetime | None = None,
     ) -> None:
-        self.logger().info("Importing")
+        """Import the information for the show, will not update the information even if it is outdated."""
+        self._logger().info("Importing")
         # Mark everything as deleted and let importing mark it as not deleted because this is the easiest way to
         # determine when an entry is deleted
-        Show.objects.filter(id=self._show.id, website=self.WEBSITE).update(deleted=True)
-        if self._show.id:
-            Season.objects.filter(show=self._show).update(deleted=True)
-            Episode.objects.filter(season__show=self._show).update(deleted=True)
+        Show.objects.filter(id=self.show_object.id, website=self._website_name).update(deleted=True)
+        if self.show_object.pk:
+            Season.objects.filter(show=self.show_object).update(deleted=True)
+            Episode.objects.filter(season__show=self.show_object).update(deleted=True)
 
-        # Clear all caches just in case
-
-        self._import_show(minimum_info_timestamp, minimum_modified_timestamp)
-        self._import_seasons(minimum_info_timestamp, minimum_modified_timestamp)
-        self._import_episodes(minimum_info_timestamp, minimum_modified_timestamp)
+        self._import_show(minimum_modified_timestamp)
+        self._import_seasons(minimum_modified_timestamp)
+        self._import_episodes(minimum_modified_timestamp)
         self._set_update_at()
-
-    @abstractmethod
-    def _import_show(
-        self,
-        minimum_info_timestamp: datetime | None = None,
-        minimum_modified_timestamp: datetime | None = None,
-    ) -> None:
-        pass
-
-    @abstractmethod
-    def _import_seasons(
-        self,
-        minimum_info_timestamp: datetime | None = None,
-        minimum_modified_timestamp: datetime | None = None,
-    ) -> None:
-        pass
-
-    @abstractmethod
-    def _import_episodes(
-        self,
-        minimum_info_timestamp: datetime | None = None,
-        minimum_modified_timestamp: datetime | None = None,
-    ) -> None:
-        pass
 
     def _set_update_at(self) -> None:
         latest_episode = (
-            Episode.objects.filter(season__show=self._show, deleted=False).order_by("-release_date").first()
+            Episode.objects.filter(season__show=self.show_object, deleted=False).order_by("-release_date").first()
         )
+        """Set the update_at field for the show object automatically based on when the latest episode was released."""
         # ? Why is this being checked?
         if latest_episode:
             # If the episode aired within a month of the last download update the information weekly
-            if latest_episode.release_date > self._show.info_timestamp - timedelta(days=365 / 12):
+            if latest_episode.release_date > self.show_object.info_timestamp - timedelta(days=365 / 12):
                 weekly_airing = latest_episode.release_date + timedelta(days=7)
 
                 # If the weekly update has not yet occured update the information a week after the last episode aired
                 if weekly_airing > datetime.now().astimezone():
-                    self._show.update_at = weekly_airing
+                    self.show_object.update_info_at = weekly_airing
                 # If the weekly update has already occured update the information a week from the last update
                 else:
-                    self._show.update_at = self._show.info_timestamp + timedelta(days=7)
+                    self.show_object.update_info_at = self.show_object.info_timestamp + timedelta(days=7)
             # Any other situation update the information monthly
             else:
-                self._show.update_at = self._show.info_timestamp + timedelta(days=365 / 12)
-        self._show.save()
-
-    def _image_file_from_url(self, image_url: str, name: str, extension: str | None = None) -> PavedPath:
-        image_name = image_url.split("/")[-1]
-        image_id = image_name.split(".")[0]
-        if extension is None:
-            extension = image_name.split(".")[-1]
-        file = self._files_dir / "Images" / f"{name} ({image_id}).{extension}"
-        file.title = f"{name} ({image_id}).{extension}"
-        return file
-
-    def _download_image(self, page: BeerShaker, url: str, file: PavedPath) -> None:
-        if file.is_outdated():
-            self.logger("Downloading").info(file.title)
-            page.download_image(file, url)
+                self.show_object.update_info_at = self.show_object.info_timestamp + timedelta(days=365 / 12)
+        self.show_object.save()
 
     @abstractmethod
-    def _any_file_outdated(self, minimum_timestamp: datetime | None = None) -> bool:
-        pass
+    def _import_show(
+        self,
+        minimum_modified_timestamp: datetime | None = None,
+    ) -> None:
+        """Import the information for just the show."""
+
+    @abstractmethod
+    def _import_seasons(
+        self,
+        minimum_modified_timestamp: datetime | None = None,
+    ) -> None:
+        """Import the information for just the seasons."""
+
+    @abstractmethod
+    def _import_episodes(
+        self,
+        minimum_modified_timestamp: datetime | None = None,
+    ) -> None:
+        """Import the information for just the episodes."""
+
+    @abstractmethod
+    def _any_file_outdated(self) -> bool:
+        """Check if any of the files are outdated."""
+
+    @abstractmethod
+    def _download_all(self) -> None:
+        """Download all of the information if it is outdated or missing.
+
+        Does not import the information.
+        """

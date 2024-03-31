@@ -1,27 +1,5 @@
 {% comment %} Not using a normal toast container here because I prefer the visual look of the toasts being right on top
 of each other with minimal empty space between them {% endcomment %}
-{% for message in messages %}
-  {% comment %} Do an oob swap on messages so that way messages can stack on top of each other. If the messages just get
-replaced it can be hard to tell if the a message was replaced with an identical message or if there was some kind of
-  server error and nothing happened {% endcomment %}
-  <div hx-swap-oob="beforebegin:#htmx-footer">
-    <div class="toast fade show w-100"
-         role="alert"
-         aria-live="assertive"
-         aria-atomic="true">
-      <div class="toast-header {{ message.tags }}">
-        <strong class="me-auto">{{ message }}</strong>
-        <button type="button"
-                class="btn-close"
-                data-bs-dismiss="toast"
-                aria-label="Close"></button>
-      </div>
-      {% if message.extra_tags %}
-        <div class="toast-body overflow-auto" style="max-height: 20vh">{{ message.extra_tags }}</div>
-      {% endif %}
-    </div>
-  </div>
-{% endfor %}
 <div class="toast fade show w-100"
      role="alert"
      aria-live="assertive"
@@ -31,10 +9,6 @@ replaced it can be hard to tell if the a message was replaced with an identical 
       {% block "title" %}
       {% endblock "title" %}
     </strong>
-    <small>
-      {% block "subtitle" %}
-      {% endblock "subtitle" %}
-    </small>
     <button type="button"
             class="btn-close"
             data-bs-dismiss="toast"

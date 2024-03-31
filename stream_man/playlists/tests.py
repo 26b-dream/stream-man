@@ -1,4 +1,3 @@
-"""Tests for the playlists app."""
-from django.test import TestCase
+"""When I have the time test will be added."""
 
 # Create your tests here.

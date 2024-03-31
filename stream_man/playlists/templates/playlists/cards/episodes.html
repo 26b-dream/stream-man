@@ -1,12 +1,14 @@
 {% load playlist_tags %}
-{% load thumbnail %}
 <div class="row">
     {% for episode in episodes %}
         <div class="p-2"
              id="card-{{ episode.id }}"
              style="width: {% divide 100 columns %}%"
-             onclick="DoubleClickV2('card-{{ episode.id }}', htmx.ajax, {% episode_card_url_1_params request episode %}, window.open, {% episode_card_url_2_params request episode %})">
-            <div id="episode-{{ episode.id }}-mini-form-button" class="card text-wrap">
+             hx-target="#htmx-footer"
+             hx-swap="innerHTML"
+             hx-get="{% url 'playlists:episode_info_footer' episode.id %}"
+             hx-on="htmx:afterRequest: highlightCard({{ episode.id }})">
+            <div id="actual-card-{{ episode.id }}" class="card text-wrap">
                 <div class="card-header">
                     <img src="{{ episode.season.show.favicon_url }}"
                          alt="Favicon"
@@ -14,29 +16,26 @@
                                 height:16px">
                     {{ episode.season.show.name }}
                 </div>
-                {% comment %} Need to convert the image width to a string for it to work correctly {% endcomment %}
-                {% thumbnail episode.image image_width|stringformat:"i" upscale=False as img %}
-                <img src="{{ img.url }}"
+                <img src="{% url 'media:episode_image' episode.id image_width %}"
                      class="card-img-top"
                      loading="lazy"
                      width="auto"
                      height="100%"
                      alt="Episode Image">
-            {% endthumbnail %}
-            <div class="card-body" style="padding-bottom: 0; padding-top: 0;">
-                <figcaption class="figure-caption">
-                    {% comment %} TODO: Ability to choose what values are shown here {% endcomment %}
-                    <strong>Season:</strong> {{ episode.season.name }}
-                    <br>
-                    <strong>Episode:</strong> {{ episode.number }}. {{ episode.name }}
-                    <br>
-                    <strong>Date:</strong> {{ episode.release_date }}
-                    <br>
-                    <strong>Duration:</strong> {{ episode.duration|seconds_to_time }}
-                    <br>
-                </figcaption>
+                <div class="card-body" style="padding-bottom: 0; padding-top: 0;">
+                    <figcaption class="figure-caption">
+                        {% comment %} TODO: Ability to choose what values are shown here {% endcomment %}
+                        <strong>Season:</strong> {{ episode.season.name }}
+                        <br>
+                        <strong>Episode:</strong> {{ episode.number }}. {{ episode.name }}
+                        <br>
+                        <strong>Date:</strong> {{ episode.release_date }}
+                        <br>
+                        <strong>Duration:</strong> {{ episode.duration|seconds_to_time }}
+                        <br>
+                    </figcaption>
+                </div>
             </div>
         </div>
-    </div>
-{% endfor %}
+    {% endfor %}
 </div>

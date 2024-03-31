@@ -3,25 +3,27 @@ from __future__ import annotations
 import datetime
 from typing import Any, Optional
 
-from common.scrapers import Scraper
+from common.get_scraper import GetScraper
 from django.test import TestCase
 from json_file import JSONFile
 from media.models import Show
 
 
 class ScraperTestBase(TestCase):
+    """Base class for testing scrapers."""
+
     CURRENT_TIME = datetime.datetime.now().astimezone()
     DATE_A_WEEK_AGO = CURRENT_TIME - datetime.timedelta(weeks=1)
 
     def compare_all(self, url: str) -> None:
-        """Compares all of the information"""
-        scraper = Scraper(url)
+        """Compares all of the information."""
+        scraper = GetScraper(url)
         scraper.update(self.DATE_A_WEEK_AGO, self.CURRENT_TIME)
-        self.compare_show(scraper.show_object())
+        self.compare_show(scraper.show_object)
 
     def compare_show(self, show_object: Show) -> None:
-        """Compare all of the show information"""
-        correct_show = (JSONFile(__file__).parent / f"{show_object.website}_{show_object.show_id}.json").parsed()
+        """Compare all of the show information."""
+        correct_show = (JSONFile(__file__).parent / f"{show_object.website}_{show_object.show_id}.json").parsed_cached()
         show = show_object.dump()
 
         # Loop through dumped_show and parsed_json

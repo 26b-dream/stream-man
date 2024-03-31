@@ -1,4 +1,4 @@
-"""AbstractScraperClass, which all scraper plugins must inherit and implement."""
+"""Contains AbstractScraperClass."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -11,66 +11,39 @@ if TYPE_CHECKING:
 
 
 class AbstractScraperClass(ABC):
-    """Abstract class that must be inherited and implemented by plugins for them to be loaded."""
+    """Abstract class that must be inherited and implemented by plugins for them to function."""
 
-    """The show object from the database."""
     show_object: Show
-
-    @classmethod
-    @abstractmethod
-    def website_name(cls) -> str:
-        """Get the name of the website.
-
-        This could be a class constant in some situations, but having it as a function gives you the freedom to make a
-        scraper that supports multiple websites at once.
-
-        Returns:
-        -------
-        str: The name of the website.
-        """
+    """The show object from the database. It should be initialized when the scraper instance is created."""
 
     @classmethod
     @abstractmethod
     def is_valid_show_url(cls, show_url: str) -> bool:
-        """Check if the given URL is a valid show URL.
+        """Check if the given URL is a valid show URL for the scraper.
 
-        Parameters:
-        ----------
-        show_url (str): The URL to check.
+        Args:
+            show_url: The URL to check.
 
         Returns:
-        -------
-        bool: True if the URL is a valid show URL, False otherwise.
+            True if the URL is valid, False if the URL is not valid for the scraper.
+        """
+
+    @abstractmethod
+    def update(self, minimum_modified_timestamp: datetime | None = None) -> None:
+        """Download and update the information for an entire show.
+
+        If the data in the database is older than the minimum_modified_timestamp, it will be updated but not downloaded
+
+        Args:
+            minimum_modified_timestamp: Import information if the stored information was last modified before this.
         """
 
     @classmethod
     def credential_keys(cls) -> list[str]:
-        """List of credentials that are required for the scraper.
+        """List of credentials that are required for the scraper to function.
 
         Returns:
-        -------
             A list of values where each value is the name of a credential for the scraper
         """
-        # By default a blank value can be returned for scrapers that don't require credentials
+        # By default a blank value is returned, so if a scraper requires no credentials, this function can be omitted.
         return []
-
-    @abstractmethod
-    def update(
-        self,
-        minimum_info_timestamp: datetime | None = None,
-        minimum_modified_timestamp: datetime | None = None,
-    ) -> None:
-        """Download and update the information for the entire show.
-
-        If files are older than the minimum_info_timestamp, they will be downloaded.
-        If information in the database is older than the minimum_modified_timestamp, it will be updated.
-
-        Parameters
-        ----------
-        minimum_info_timestamp (datetime | None): The minimum timestamp for files to be downloaded.
-        minimum_modified_timestamp (datetime | None): The minimum timestamp for information to be updated.
-
-        Returns:
-        -------
-        None
-        """

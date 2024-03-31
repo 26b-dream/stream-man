@@ -4,7 +4,8 @@ When using this module to be imported before any Django models are imported. Wit
 and starting with an underscore isort should automatically make it import before any Django models.
 
 I hate how sketchy this is, but it is the easiest solution for consistently setting up Django with minimal issues from
-linters"""
+linters
+"""
 
 from __future__ import annotations
 

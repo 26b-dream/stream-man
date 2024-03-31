@@ -41,9 +41,9 @@ but easy to ignore {% endcomment %}
         </div>
         <div class="row">
             <div class="col border text-nowrap">
-                <h5>{{ form.filter.label }}</h5>
-                {{ form.filter }}
-                {{ form.filter.errors }}
+                <h5>{{ form.filter_episodes.label }}</h5>
+                {{ form.filter_episodes }}
+                {{ form.filter_episodes.errors }}
             </div>
             <div class="col border text-nowrap">
                 <h5>{{ form.reverse.label }}</h5>
@@ -56,7 +56,13 @@ but easy to ignore {% endcomment %}
                 <h5>{{ form.websites.label }}</h5>
                 {% comment %} style="max-height: 10em;" - Extra style to limit the height of the website list so it doesn't
                 stretch the entire form in ugly ways {% endcomment %}
-                <div class="overflow-auto" style="max-height: 10em;">
+                <style>
+                    .max-height-for-website-list {
+                        max-height: 10em;
+                        overflow-auto;
+                    }
+                </style>
+                <div class="overflow-auto max-height-for-website-list">
                     {{ form.websites }}
                     {{ form.websites.errors }}
                 </div>
@@ -72,30 +78,47 @@ but easy to ignore {% endcomment %}
         </div>
         <div class="row">
             <div class="col border text-nowrap">
-                {% comment %} style="max-height: 10em;" - Extra style to limit the height of the website list so it doesn't
-                stretch the entire form in ugly ways {% endcomment %}
-                <div class="overflow-auto" style="max-height: 10em;">
-                    {{ form.deleted }} {{ form.deleted.label }}
-                    {{ form.deleted.errors }}
+                <div class="overflow-auto ">
+                    {{ form.include_deleted_episodes }} {{ form.include_deleted_episodes.label }}
+                    {{ form.include_deleted_episodes.errors }}
                 </div>
             </div>
         </div>
-        <div class="modal-footer">
-            <button id="sort-episodes-set-defaults-button"
-                    class="btn btn-success"
-                    hx-target="#htmx-footer"
-                    hx-post="{% url 'playlists:forms/playlist_filter/set_defaults' playlist.id %}"
-                    hx-on="click: set_playlist_episode_refresh_filter_values('playlist-filter-form')"
-                    hx-confirm="Are you sure you want to change the playlist defaults?"
-                    type="submit">Set as Playlist Defaults</button>
-            {% comment %} TODO: I have no idea why this value is sent as get request instead of a post request {% endcomment %}
-            <button id="sort-episodes-submit-button"
-                    class="btn btn-success"
-                    hx-vals='{"submit_form": true}'
-                    hx-target="#htmx-footer"
-                    hx-post="{% url 'playlists:forms/playlist_filter/submit' playlist.id %}"
-                    hx-on="click: set_playlist_episode_refresh_filter_values('playlist-filter-form')"
-                    type="submit">Sort Episodes</button>
-        </div>
     </form>
+    <div class="modal-footer">
+        <button id="sort-episodes-submit-button"
+                class="btn btn-success"
+                onclick="saveEpisodeFilterValues()"
+                type="submit">Sort Episodes</button>
+    </div>
+    {% comment %} TODO: Convert to TypeScript {% endcomment %}
+    <script>
+        function saveEpisodeFilterValues() {
+            const form = document.querySelector("#playlist-filter-form");
+            const formData = new FormData(form);
+            
+            // Convert FormData to object
+            const object = {};
+            formData.forEach((value, key) => {
+                console.log("--------")
+                console.log(key, value)
+                // If the key already exists, convert its value to an array and append the new value
+                if (key === "websites" || key === "reverse" || key === "filter_episodes") {
+                    if (!Array.isArray(object[key])) {
+                        object[key] = []
+                    }
+                    object[key].push(value);
+                } else {
+                    object[key] = value;
+                }
+                console.log(object[key])
+            });
+            
+            const json_string = JSON.stringify(object);
+            document.cookie = `episode-filter-{{playlist.id}}=${json_string}; path=/`;
+            console.log(json_string)
+            body = document.querySelector("body")
+            htmx.trigger(body, "refreshEpisodes")
+        }
+    </script>
 {% endblock "body" %}

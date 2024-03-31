@@ -1,4 +1,4 @@
-"""Forms for the playlists app"""
+"""Forms for the playlists app."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -7,23 +7,26 @@ from django import forms
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
 
-from .builder import Builder
+from .builder import Builder, get_functions
 from .models import Playlist, PlaylistShow, Show
 
 if TYPE_CHECKING:
-    from typing import Any, Optional
+    from typing import Any
 
     from django.db.models.query import QuerySet
-    from media.models import Episode
+    from django.utils.safestring import SafeText
 
 
 class WebsitesField(forms.ModelChoiceField):
-    """A website ModelChoiceField that displays the website favicon next to the website name"""
+    """A website ModelChoiceField that displays the website favicon next to the website name."""
 
     # Ignore the type here because Show is a more accurate subclass of Model
-    def label_from_instance(self, obj: Show):  # pyright: ignore [reportIncompatibleMethodOverride]
-        """Label that is automatically displayed in forms"""
-        return mark_safe(f"<img width='16' height='16' src='{escape(obj.favicon_url)}'></img> {escape(obj.website)}")
+    def label_from_instance(self, obj: Show) -> SafeText:  # pyright: ignore [reportIncompatibleMethodOverride]
+        """Label that is automatically displayed in forms."""
+        # This line is secure enough. The favicon_url and website are both hardcoded values for each plugin. If XSS is
+        # occuring here it is because the user installed a bad plugin in which case it can do a lot more than just an
+        # XSS exploit.
+        return mark_safe(f"<img width='16' height='16' src='{escape(obj.favicon.url)}'></img> {escape(obj.website)}")  # noqa: S308
 
     # TODO: Maybe filter the results based on the playlist
     @staticmethod
@@ -43,47 +46,57 @@ class WebsitesField(forms.ModelChoiceField):
 
 
 class NewPlaylistForm(forms.ModelForm):
-    class Meta:  # pyright: ignore [reportIncompatibleVariableOverride]
+    """Form for creating a new playlist."""
+
+    class Meta:  # type: ignore[reportIncompatibleVariableOverride] # noqa: D106 - Meta has false positives
         model = Playlist
-        fields = ["name"]
+        fields = ("name",)
 
 
-# Don't use a ModelForm or ModelFormSet because it makes it harder to manage empty strings.
 class AddShowForm(forms.Form):
+    """Form for adding a show to a playlist."""
+
+    # A big text entry field is the easiest way to input values but requires extra work compared to a ModelForm
     urls = forms.CharField(required=False, widget=forms.Textarea)
 
 
 class VisualConfigForm(forms.Form):
+    """Form for configuring the visual settings of a playlist."""
+
     columns = forms.IntegerField()
     image_width = forms.IntegerField()
 
 
 class EditPlaylistForm(forms.ModelForm):
-    class Meta:  # pyright: ignore [reportIncompatibleVariableOverride]
+    """Form for editing a playlist."""
+
+    class Meta:  # type: ignore[reportIncompatibleVariableOverride] # noqa: D106 - Meta has false positives
         model = Playlist
-        fields = ["name", "deleted", "thumbnail"]
+        fields = ("name", "deleted", "thumbnail")
 
 
-class PlaylistSortForm(forms.Form):
+class PlaylistFilterForm(forms.Form):
+    """Form for filtering a playlist."""
+
     show_order = forms.ChoiceField(
-        choices=Builder.ShowOrder.acceptable_functions,
+        choices=get_functions(Builder.ShowOrder),
         widget=forms.RadioSelect,
         initial="shuffle",
     )
     episode_order = forms.ChoiceField(
-        choices=Builder.EpisodeOrder.acceptable_functions,
+        choices=get_functions(Builder.EpisodeOrder),
         widget=forms.RadioSelect,
         initial="chronological",
     )
 
     change_show = forms.ChoiceField(
-        choices=Builder.ChangeShowIf.acceptable_functions,
+        choices=get_functions(Builder.ChangeShowIf),
         widget=forms.RadioSelect,
         initial="after_every_episode",
     )
 
     rotate_type = forms.ChoiceField(
-        choices=Builder.Rotate.acceptable_functions,
+        choices=get_functions(Builder.Rotate),
         widget=forms.RadioSelect,
         initial="rotate",
     )
@@ -91,8 +104,10 @@ class PlaylistSortForm(forms.Form):
     REVERSE_OPTIONS = (("shows", "Shows"), ("episodes", "Episodes"))
     reverse = forms.MultipleChoiceField(choices=REVERSE_OPTIONS, widget=forms.CheckboxSelectMultiple, required=False)
 
-    filter = forms.MultipleChoiceField(
-        choices=Builder.Filter.acceptable_functions, widget=forms.CheckboxSelectMultiple, required=False
+    filter_episodes = forms.MultipleChoiceField(
+        choices=get_functions(Builder.FilterEpisodes),
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
     )
 
     number_of_episodes = forms.IntegerField(initial=1000, required=False)
@@ -106,10 +121,12 @@ class PlaylistSortForm(forms.Form):
         required=False,  # Not required because a blank value is used to indicate all websites
     )
 
-    deleted = forms.BooleanField(required=False)
+    include_deleted_episodes = forms.BooleanField(required=False)
 
     # Method to dynamically set the queryset
     # See: https://stackoverflow.com/questions/4880842/
+    # TODO: Clean this up, check if I can initialize the fields in a seperate function afterwards so I don't have to do
+    # the messy args/kwargs Any stuff
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Args are passed in a kind of ugly way that require triple checking to see if the key exists
@@ -120,10 +137,10 @@ class PlaylistSortForm(forms.Form):
     def initial_values() -> dict[str, Any]:
         """Get the initial values for the form, useful when trying to compile a valid form from a POST or GET
         response"""
-        initial_values = {}
-        for field_name in PlaylistSortForm().fields.keys():
-            if PlaylistSortForm().fields[field_name].initial:
-                initial_values[field_name] = PlaylistSortForm().fields[field_name].initial
+        initial_values: dict[str, Any] = {}
+        for field_name in PlaylistFilterForm().fields.keys():
+            if PlaylistFilterForm().fields[field_name].initial:
+                initial_values[field_name] = PlaylistFilterForm().fields[field_name].initial
         return initial_values
 
 
@@ -132,7 +149,7 @@ class ShowsField(forms.ModelMultipleChoiceField):
 
     # Ignore the type here because Show is a more accurate subclass of Model
     def label_from_instance(self, obj: Show):  # pyright: ignore [reportIncompatibleMethodOverride]
-        return mark_safe(f"<img width='16' height='16' src='{escape(obj.favicon_url)}'></img> {escape(obj.name)}")
+        return obj.pretty_html_name()
 
 
 # methods for setting up values

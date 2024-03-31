@@ -7,17 +7,16 @@
     <main class="flex-shrink-0">
       <div class="container-fluid">
         <h1 class="mt-5">Playlists</h1>
-        {% comment %} hx-on - unclick because when these buttons are clicked the cards should be unclicked {% endcomment %}
         <button hx-target="#htmx-footer"
-                hx-swap="innerHTML"
-                hx-get="{% url 'playlists:forms/new_playlist/form' %}"
+                hx-get="{% url 'playlists:forms/new_playlist' %}"
                 type="button"
-                hx-on="htmx:afterRequest: unclick()"
                 class="btn btn-primary">New Playlist</button>
-        {% comment %} hx-on - Keeps the card coloring between reloads {% endcomment %}
+        <button id="edit-mode-button"
+                onclick="editMode()"
+                type="button"
+                class="btn btn-primary">Edit Mode</button>
         <div id="playlists"
              hx-get="{% url 'playlists:cards/playlist' %}"
-             hx-on="htmx:afterRequest: color_card(lastClickedButton)"
              hx-trigger="refreshPlaylists from:body">
           {% include "playlists/cards/playlists.html" with playlists=playlists %}
         </div>
@@ -26,3 +25,56 @@
     {% include "footer.html" %}
   </body>
 </html>
+<script>
+  function editMode() {
+    const cards = document.querySelectorAll('[id^="card-"]');
+    cards.forEach(card => {
+      const playlist_id = card.getAttribute('playlist-id');
+      // Attributes to make the edit modal pop up
+      card.setAttribute('hx-get', `forms/edit_playlist/${playlist_id}` );
+      card.setAttribute('hx-target', "#htmx-footer");
+
+      // Remove the onclick that makes the card open the playlist
+      card.removeAttribute('onclick');
+    })
+
+    // Change the button color when in edit mode
+    const editModeButton = document.getElementById('edit-mode-button');
+    editModeButton.classList.remove('btn-primary');
+    editModeButton.classList.add('btn-danger');
+    editModeButton.setAttribute('onclick', "regularMode()");
+
+    // When htmx attribues are modified manually this must be called for htmx to recognize the changes
+    htmx.process(document.body);
+  };
+  function regularMode() {
+    const cards = document.querySelectorAll('[id^="card-"]');
+    cards.forEach(card => {
+      // Remove the attributes that make the edit modal pop up
+      card.removeAttribute('hx-get');
+      card.removeAttribute('hx-target');
+
+      // Add the onclick that makes the card open the playlist
+      const playlist_id = card.getAttribute('playlist-id');
+      card.setAttribute('onclick', `window.location.href = "/playlists/${playlist_id}"`);
+    })
+
+    // Change the button color when not in edit mode
+    const editModeButton = document.getElementById('edit-mode-button');
+    editModeButton.classList.add('btn-primary');
+    editModeButton.classList.remove('btn-danger');
+    editModeButton.setAttribute('onclick', "editMode()");
+
+    // When htmx attribues are modified manually this must be called for htmx to recognize the changes
+    htmx.process(document.body);
+  };
+    document.body.addEventListener("playlistsRefreshed", function (evt) {
+    document.body.addEventListener('htmx:afterRequest', function() {
+    // If in edit mode before the playlists are refreshed go back into edit mode
+    const editModeButton = document.getElementById('edit-mode-button');
+    if (editModeButton.getAttribute('onclick') === 'regularMode()') {
+      editMode();
+    }
+})
+});
+</script>

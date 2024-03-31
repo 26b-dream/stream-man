@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import _activate_django  # pyright: ignore[reportUnusedImport] # pylint: disable=W0611
+import _activate_django  # pyright: ignore[reportUnusedImport]  # noqa: F401
 
 from .scraper_test_base import ScraperTestBase
 

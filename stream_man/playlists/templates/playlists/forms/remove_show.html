@@ -6,7 +6,7 @@
   <form>
     {% csrf_token %}
     {{ form }}
-    <button hx-post="{% url 'playlists:forms/remove_show/submit' playlist_id=playlist.id %}"
+    <button hx-post="{% url 'playlists:forms/remove_show' playlist_id=playlist.id %}"
             hx-target="#htmx-footer">Remove Shows</button>
   </form>
 {% endblock "body" %}

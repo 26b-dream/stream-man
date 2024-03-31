@@ -3,16 +3,30 @@
   Visual Config
 {% endblock "title" %}
 {% block "body" %}
-  <form>
-    {% csrf_token %} {{ form }}
-    {% comment %} hx-on - Immediatly update the number of cards per row to make it look correct without changing the order
-    of the episodes {% endcomment %}
-    {% comment %} htmx:xhr:loadend: - Do the update after the form's reponse is given because the value is stored as a
-    cookie in the response of the form {% endcomment %}
-    <button hx-post="{% url 'playlists:forms/visual_config/submit' playlist_id=playlist.id %}"
-            hx-target="#htmx-footer"
-            hx-on="htmx:xhr:loadend: update_card_visuals(getCookie(`playlist_{{ playlist.id }}_columns`), getCookie(`playlist_{{ playlist.id }}_image_width`));">
-      Update Visuals
-    </button>
+  <form id="visual-config-form">
+    <div>
+      <label for="label-visual-congig-columns">Columns:</label>
+      {{ columns }}
+      <input type="number"
+             name="columns"
+             value="{{ columns }}"
+             min="1"
+             required=""
+             id="visual-config-form-columns"
+             onchange="setCardColumns(this.value)">
+    </div>
+    <div>
+      <label for="label-visual-config-image-width">Image width:</label>
+      <input type="number"
+             name="image_width"
+             value="{{ image_width }}"
+             min="0"
+             id="visual-config-form-image-width"
+             required=""
+             onchange="setImageWidth(this.value)">
+    </div>
   </form>
+  <button onclick="saveVisualConfig({{ playlist.id }}); return false;">Update Visuals</button>
+  {% comment %} TODO: This will need to be moved out of this for it to work but for testing this is fine {% endcomment %}
+  </script>
 {% endblock "body" %}
