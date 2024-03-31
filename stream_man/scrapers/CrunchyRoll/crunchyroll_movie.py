@@ -180,3 +180,8 @@ class CrunchyrollMovie(CrunchyRollShared, AbstractScraperClass):
             # No seperate file for episodes so just use the season file
             episode.deleted = False
             episode.add_timestamps_and_save(season.info_timestamp)
+
+    @override
+    def _set_update_at(self) -> None:
+        # Do nothing because movies should basically never change
+        pass
