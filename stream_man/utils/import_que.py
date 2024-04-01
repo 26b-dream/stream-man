@@ -57,5 +57,5 @@ if __name__ == "__main__":
         import_new_url(show)
 
     # Update shows that have already been imported but the imported data is outdated
-    for show in Show.objects.filter(update_at__lt=datetime.now().astimezone()):
+    for show in Show.objects.filter(update_info_at__lt=datetime.now().astimezone()):
         update_show(show)
