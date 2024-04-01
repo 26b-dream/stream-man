@@ -181,7 +181,7 @@ class Forms:
                 PlaylistImportQueue.objects.create(url=url, playlist=playlist)
                 try:
                     scraper = GetScraper(url)
-                    form.add_error(None, f"{scraper.__class__}: {url}")
+                    form.add_error(None, f"{scraper.__class__.__name__}: {url}")
                 except InvalidURLError:
                     form.add_error(None, mark_safe(f"<b>Error</b>: {escape(url)}"))  # noqa: S308 - It's fine
 
