@@ -31,7 +31,7 @@
     cards.forEach(card => {
       const playlist_id = card.getAttribute('playlist-id');
       // Attributes to make the edit modal pop up
-      card.setAttribute('hx-get', `forms/edit_playlist/${playlist_id}` );
+      card.setAttribute('hx-get', `${playlist_id}/forms/edit_playlist` );
       card.setAttribute('hx-target', "#htmx-footer");
 
       // Remove the onclick that makes the card open the playlist
