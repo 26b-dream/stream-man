@@ -197,7 +197,8 @@ class YouTube(BaseScraper, AbstractScraperClass):
 
     def _episode_list(self) -> list[dict[str, Any]]:
         """Get the list of videos."""
-        if self.type == "Channel":
+        # For some reason some JSON files have the videos listed in entries and others have a sub-entry called entries
+        if self._show_json_file.parsed_cached()["entries"][0].get("entries"):
             return self._show_json_file.parsed_cached()["entries"][0]["entries"]
 
         # Plylists can just return this simplified version
@@ -214,7 +215,7 @@ class YouTube(BaseScraper, AbstractScraperClass):
             self.show_object.name = f"{parsed_show['channel']} - {parsed_show['title']}"
             self.show_object.media_type = "Playlist"
             self.show_object.show_id = self._show_id
-            self.show_object.url = f"{self.DOMAIN}/playlist?list={self._show_id}"
+            self.show_object.url = f"{self.DOMAIN}/@{self._show_id}"
             self.show_object.description = parsed_show["description"]
             self.show_object.set_favicon(self._favicon_file)
             self.show_object.deleted = False
